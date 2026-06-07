@@ -1,0 +1,24 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: clinical-ai-local
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and push
+        run: |
+          docker build -t registry:5000/job-scraper:prod-latest .
+          docker push registry:5000/job-scraper:prod-latest
+
+      - name: Deploy
+        run: |
+          helm upgrade --install job-scraper ./charts/job-scraper \
+            --namespace job-scraper \
+            --create-namespace \
+            --wait \
+            --timeout 10m

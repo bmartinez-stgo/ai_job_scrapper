@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "job-scraper.app.name" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "job-scraper.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "job-scraper.app.selectorLabels" . | nindent 4 }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.app.port }}
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "job-scraper.llm.name" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "job-scraper.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "job-scraper.llm.selectorLabels" . | nindent 4 }}
+  ports:
+    - port: {{ .Values.llm.port }}
+      targetPort: {{ .Values.llm.port }}
+      protocol: TCP

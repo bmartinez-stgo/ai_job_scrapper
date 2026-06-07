@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Pipeline — Job Scraper{% endblock %}
+{% block nav_pipeline %}active{% endblock %}
+
+{% block content %}
+<div class="flex-1 overflow-y-auto p-6" x-data="pipeline()">
+
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-xl font-semibold">Application Pipeline</h1>
+  </div>
+
+  {% if applications %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-slate-400 border-b border-slate-700 text-left">
+          <th class="pb-3 pr-4">Role</th>
+          <th class="pb-3 pr-4">Company</th>
+          <th class="pb-3 pr-4">Score</th>
+          <th class="pb-3 pr-4">Status</th>
+          <th class="pb-3 pr-4">Stage</th>
+          <th class="pb-3 pr-4">Submitted</th>
+          <th class="pb-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800">
+        {% for app in applications %}
+        <tr class="hover:bg-slate-800/50">
+          <td class="py-3 pr-4">
+            <a href="{{ app.url }}" target="_blank" class="text-indigo-400 hover:underline">{{ app.title }}</a>
+          </td>
+          <td class="py-3 pr-4 text-slate-300">{{ app.company }}</td>
+          <td class="py-3 pr-4">
+            {% if app.score %}
+            <span class="font-semibold {% if app.score >= 80 %}text-emerald-400{% elif app.score >= 60 %}text-amber-400{% else %}text-red-400{% endif %}">
+              {{ app.score }}
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="py-3 pr-4">
+            <span class="px-2 py-0.5 rounded text-xs
+              {% if app.status == 'submitted' %}bg-emerald-900 text-emerald-300
+              {% elif app.status == 'pending_approval' %}bg-amber-900 text-amber-300
+              {% elif app.status == 'rejected_self' %}bg-slate-700 text-slate-400
+              {% elif app.status == 'filling' or app.status == 'awaiting_submit' %}bg-indigo-900 text-indigo-300
+              {% else %}bg-slate-700 text-slate-400{% endif %}">
+              {{ app.status | replace('_', ' ') }}
+            </span>
+          </td>
+          <td class="py-3 pr-4 text-slate-400 text-xs">{{ app.stage }}</td>
+          <td class="py-3 pr-4 text-slate-500 text-xs">
+            {{ app.submitted_at[:10] if app.submitted_at else '—' }}
+          </td>
+          <td class="py-3">
+            <div class="flex gap-2">
+              {% if app.status == 'awaiting_submit' %}
+              <button onclick="submitApp({{ app.id }})"
+                      class="px-2 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs">
+                Submit
+              </button>
+              {% endif %}
+              {% if app.status == 'pending_approval' %}
+              <button onclick="approveApp({{ app.id }})"
+                      class="px-2 py-1 bg-indigo-700 hover:bg-indigo-600 text-white rounded text-xs">
+                Fill
+              </button>
+              {% endif %}
+              <select onchange="updateStage({{ app.id }}, this.value)" class="bg-slate-800 border border-slate-600 rounded text-xs text-slate-300 px-1">
+                <option value="">Update stage</option>
+                <option>phone_screen</option>
+                <option>technical</option>
+                <option>final_round</option>
+                <option>offer</option>
+                <option>negotiating</option>
+                <option>accepted</option>
+                <option>declined</option>
+                <option>rejected</option>
+                <option>ghosted</option>
+              </select>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center py-20 text-slate-500">
+    <p class="text-lg">No applications yet.</p>
+    <p class="text-sm mt-2">Ask the agent to draft an application for a matched job.</p>
+    <a href="/" class="mt-4 inline-block text-indigo-400 hover:underline text-sm">Open agent →</a>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+async function approveApp(id) {
+  const r = await fetch(`/api/applications/${id}/approve`, {method: 'POST'});
+  const data = await r.json();
+  if (data.ok) {
+    alert('Filling in progress. Refresh to see screenshot.');
+    location.reload();
+  } else {
+    alert('Error: ' + (data.error || 'unknown'));
+  }
+}
+
+async function submitApp(id) {
+  if (!confirm('Submit this application now?')) return;
+  const r = await fetch(`/api/applications/${id}/submit`, {method: 'POST'});
+  const data = await r.json();
+  if (data.ok) {
+    alert('Submitted!');
+    location.reload();
+  } else {
+    alert('Error: ' + (data.error || 'unknown'));
+  }
+}
+
+async function updateStage(id, stage) {
+  if (!stage) return;
+  await fetch(`/api/applications/${id}/lifecycle`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({stage}),
+  });
+  location.reload();
+}
+</script>
+{% endblock %}

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}Job Scraper{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .prose-chat table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .prose-chat th { background: #1e293b; padding: 6px 10px; text-align: left; color: #94a3b8; font-weight: 500; }
+    .prose-chat td { padding: 5px 10px; border-bottom: 1px solid #334155; color: #e2e8f0; }
+    .prose-chat tr:hover td { background: #1e293b; }
+    .prose-chat code { background: #1e293b; padding: 2px 5px; border-radius: 3px; font-size: 0.8rem; }
+    .prose-chat pre { background: #1e293b; padding: 12px; border-radius: 6px; overflow-x: auto; }
+    .prose-chat a { color: #818cf8; text-decoration: underline; }
+    .prose-chat p { margin-bottom: 0.5rem; }
+    .prose-chat ul { list-style: disc; padding-left: 1.2rem; margin-bottom: 0.5rem; }
+    .prose-chat li { margin-bottom: 2px; }
+    .prose-chat h1, .prose-chat h2, .prose-chat h3 { font-weight: 600; margin-bottom: 0.4rem; color: #f1f5f9; }
+    .prose-chat h2 { font-size: 1rem; }
+    .prose-chat h3 { font-size: 0.9rem; }
+    .score-high { color: #34d399; }
+    .score-mid  { color: #fbbf24; }
+    .score-low  { color: #f87171; }
+  </style>
+</head>
+<body class="dark h-full bg-slate-900 text-slate-100 flex">
+
+  <!-- Sidebar -->
+  <aside class="w-56 bg-slate-800 border-r border-slate-700 flex flex-col flex-shrink-0">
+    <div class="px-4 py-5 border-b border-slate-700">
+      <span class="text-indigo-400 font-semibold text-sm tracking-wide uppercase">Job Scraper</span>
+    </div>
+    <nav class="flex-1 py-4 space-y-1 px-2">
+      <a href="/" class="nav-link {% block nav_chat %}{% endblock %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+        Agent
+      </a>
+      <a href="/pipeline" class="nav-link {% block nav_pipeline %}{% endblock %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+        Pipeline
+      </a>
+      <a href="/resume" class="nav-link {% block nav_resume %}{% endblock %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        Resume
+      </a>
+      <a href="/runs" class="nav-link {% block nav_runs %}{% endblock %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        Runs
+      </a>
+      <a href="/settings" class="nav-link {% block nav_settings %}{% endblock %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Settings
+      </a>
+    </nav>
+  </aside>
+
+  <style>
+    .nav-link {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px; border-radius: 6px;
+      font-size: 0.875rem; color: #94a3b8;
+      transition: all 0.15s;
+    }
+    .nav-link:hover { background: #334155; color: #f1f5f9; }
+    .nav-link.active { background: #312e81; color: #a5b4fc; }
+  </style>
+
+  <main class="flex-1 flex flex-col min-h-0 overflow-hidden">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

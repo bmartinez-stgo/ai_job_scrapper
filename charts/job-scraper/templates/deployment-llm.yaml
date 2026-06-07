@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "job-scraper.llm.name" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "job-scraper.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "job-scraper.llm.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "job-scraper.llm.selectorLabels" . | nindent 8 }}
+    spec:
+      runtimeClassName: {{ .Values.llm.runtimeClassName | quote }}
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: job-scraper-llm-cache
+      containers:
+        - name: vllm
+          image: "{{ .Values.llm.image.repository }}:{{ .Values.llm.image.tag }}"
+          imagePullPolicy: {{ .Values.llm.image.pullPolicy }}
+          args:
+            - "--model"
+            - {{ .Values.llm.modelId | quote }}
+            - "--dtype"
+            - {{ .Values.llm.dtype | quote }}
+            - "--quantization"
+            - {{ .Values.llm.quantization | quote }}
+            - "--max-model-len"
+            - {{ .Values.llm.maxModelLen | quote }}
+            - "--gpu-memory-utilization"
+            - {{ .Values.llm.gpuMemoryUtilization | quote }}
+            - "--port"
+            - {{ .Values.llm.port | quote }}
+            - "--host"
+            - "0.0.0.0"
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser"
+            - "hermes"
+            - "--enforce-eager"
+          env:
+            - name: HF_HOME
+              value: {{ .Values.llm.hfHome | quote }}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: HF_TOKEN
+          ports:
+            - name: http
+              containerPort: {{ .Values.llm.port }}
+          volumeMounts:
+            - name: model-cache
+              mountPath: {{ .Values.llm.hfHome }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+            failureThreshold: 120
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 30
+            failureThreshold: 6
+          resources:
+            limits:
+              {{- toYaml .Values.llm.resources.limits | nindent 14 }}
+              nvidia.com/gpu: 1
+            requests:
+              {{- toYaml .Values.llm.resources.requests | nindent 14 }}
+      nodeSelector:
+        {{- toYaml .Values.llm.nodeSelector | nindent 8 }}

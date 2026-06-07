@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Setup — Job Scraper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="dark h-full bg-slate-900 text-slate-100 flex items-center justify-center p-6">
+
+<div class="w-full max-w-2xl" x-data="setup()" x-init="init()">
+  <h1 class="text-2xl font-semibold text-white mb-1">Setup</h1>
+  <p class="text-slate-400 text-sm mb-8">Complete these steps to activate the job scraper.</p>
+
+  <!-- Step indicators -->
+  <div class="flex gap-2 mb-8">
+    <template x-for="(s, i) in steps" :key="i">
+      <div class="flex items-center gap-2">
+        <div :class="step === i ? 'bg-indigo-600 text-white' : (step > i ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-400')"
+             class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold">
+          <span x-show="step <= i" x-text="i+1"></span>
+          <span x-show="step > i">✓</span>
+        </div>
+        <span class="text-xs text-slate-400" x-text="s.label"></span>
+        <span x-show="i < steps.length - 1" class="text-slate-600 mx-1">›</span>
+      </div>
+    </template>
+  </div>
+
+  <!-- Step 1: Resume -->
+  <div x-show="step === 0" class="space-y-4">
+    <h2 class="text-lg font-medium">Upload your CV / Resume</h2>
+    <p class="text-sm text-slate-400">PDF or paste text. The agent will extract your profile and generate search strategies.</p>
+    <div class="border-2 border-dashed border-slate-600 rounded-xl p-6 text-center">
+      <input type="file" accept=".pdf,.txt" @change="fileSelected($event)" class="hidden" id="cv-file"/>
+      <label for="cv-file" class="cursor-pointer text-indigo-400 hover:text-indigo-300 text-sm">
+        Click to select PDF or TXT
+      </label>
+      <p class="text-slate-500 text-xs mt-1" x-text="selectedFile ? selectedFile.name : 'or paste below'"></p>
+    </div>
+    <textarea x-model="resumeText" placeholder="Or paste resume text here..."
+              rows="8" class="input-field w-full font-mono text-xs"></textarea>
+    <div class="flex gap-3">
+      <button @click="uploadResume()" :disabled="uploading"
+              class="btn-primary" x-text="uploading ? 'Processing...' : 'Upload & Extract'"></button>
+    </div>
+    <p x-show="uploadError" class="text-red-400 text-sm" x-text="uploadError"></p>
+    <p x-show="uploadDone" class="text-emerald-400 text-sm">✓ Resume processed. Profile extracted successfully.</p>
+  </div>
+
+  <!-- Step 2: Gmail -->
+  <div x-show="step === 1" class="space-y-4">
+    <h2 class="text-lg font-medium">Gmail notifications (optional)</h2>
+    <p class="text-sm text-slate-400">
+      Generate a Gmail App Password at <strong>Google Account → Security → 2-Step Verification → App passwords</strong>.
+      This is used only to send you new-match notifications.
+    </p>
+    <input type="password" x-model="gmailPassword" placeholder="Gmail App Password (16 chars)"
+           class="input-field w-full"/>
+    <div class="flex gap-3">
+      <button @click="saveGmail()" class="btn-primary">Save & Continue</button>
+      <button @click="step++" class="btn-secondary">Skip</button>
+    </div>
+  </div>
+
+  <!-- Step 3: LinkedIn cookies -->
+  <div x-show="step === 2" class="space-y-4">
+    <h2 class="text-lg font-medium">LinkedIn session (for Easy Apply)</h2>
+    <ol class="text-sm text-slate-400 space-y-1 list-decimal list-inside">
+      <li>Open LinkedIn in your browser and log in (your 2FA is already resolved there)</li>
+      <li>Install <strong class="text-white">Cookie-Editor</strong> browser extension</li>
+      <li>Click the extension → Export → Copy JSON</li>
+      <li>Paste below</li>
+    </ol>
+    <textarea x-model="linkedinCookies" placeholder='[{"name": "li_at", "value": "...", ...}]'
+              rows="6" class="input-field w-full font-mono text-xs"></textarea>
+    <div class="flex gap-3">
+      <button @click="saveCookies()" :disabled="!linkedinCookies.trim()" class="btn-primary">Save Session</button>
+      <button @click="step++" class="btn-secondary">Skip for now</button>
+    </div>
+    <p x-show="cookiesSaved" class="text-emerald-400 text-sm">✓ LinkedIn session saved.</p>
+    <p x-show="cookiesError" class="text-red-400 text-sm" x-text="cookiesError"></p>
+  </div>
+
+  <!-- Step 4: Generate search queries -->
+  <div x-show="step === 3" class="space-y-4">
+    <h2 class="text-lg font-medium">Generate search strategies</h2>
+    <p class="text-sm text-slate-400">The agent will generate optimized search queries for each role profile based on your CV.</p>
+    <button @click="generateQueries()" :disabled="generatingQueries"
+            class="btn-primary" x-text="generatingQueries ? 'Generating...' : 'Generate Search Queries'"></button>
+    <p x-show="queriesDone" class="text-emerald-400 text-sm">✓ Search queries generated for all profiles.</p>
+  </div>
+
+  <!-- Step 5: Done -->
+  <div x-show="step === 4" class="text-center space-y-4">
+    <div class="text-5xl">🎯</div>
+    <h2 class="text-xl font-semibold">You're all set!</h2>
+    <p class="text-slate-400 text-sm">The scraper will run automatically every few hours. You can also trigger it manually from the agent.</p>
+    <a href="/" class="btn-primary inline-block">Open Agent</a>
+  </div>
+
+</div>
+
+<style>
+  .input-field { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; color: #f1f5f9; font-size: 0.875rem; outline: none; }
+  .input-field:focus { border-color: #6366f1; }
+  .btn-primary { background: #4f46e5; color: white; padding: 8px 20px; border-radius: 8px; font-size: 0.875rem; cursor: pointer; transition: background 0.15s; }
+  .btn-primary:hover { background: #4338ca; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary { background: #1e293b; color: #94a3b8; padding: 8px 20px; border-radius: 8px; font-size: 0.875rem; cursor: pointer; border: 1px solid #334155; }
+  .btn-secondary:hover { background: #334155; }
+</style>
+
+<script>
+function setup() {
+  return {
+    step: 0,
+    steps: [
+      {label: 'Resume'},
+      {label: 'Gmail'},
+      {label: 'LinkedIn'},
+      {label: 'Queries'},
+      {label: 'Done'},
+    ],
+    selectedFile: null,
+    resumeText: '',
+    uploading: false,
+    uploadError: '',
+    uploadDone: false,
+    gmailPassword: '',
+    linkedinCookies: '',
+    cookiesSaved: false,
+    cookiesError: '',
+    generatingQueries: false,
+    queriesDone: false,
+
+    init() {},
+
+    fileSelected(e) {
+      this.selectedFile = e.target.files[0];
+    },
+
+    async uploadResume() {
+      this.uploading = true;
+      this.uploadError = '';
+      try {
+        const form = new FormData();
+        if (this.selectedFile) {
+          form.append('file', this.selectedFile);
+        } else if (this.resumeText.trim()) {
+          form.append('raw_text', this.resumeText);
+        } else {
+          this.uploadError = 'Provide a file or paste text.';
+          return;
+        }
+        const r = await fetch('/api/resume', {method: 'POST', body: form});
+        if (!r.ok) throw new Error('Upload failed');
+        this.uploadDone = true;
+        setTimeout(() => this.step++, 1000);
+      } catch(e) {
+        this.uploadError = e.message;
+      } finally {
+        this.uploading = false;
+      }
+    },
+
+    async saveGmail() {
+      await fetch('/api/setup/complete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({gmail_app_password: this.gmailPassword}),
+      });
+      this.step++;
+    },
+
+    async saveCookies() {
+      this.cookiesError = '';
+      try {
+        const cookies = JSON.parse(this.linkedinCookies);
+        const r = await fetch('/api/session/linkedin/cookies', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({cookies}),
+        });
+        if (!r.ok) throw new Error('Failed to save');
+        this.cookiesSaved = true;
+        setTimeout(() => this.step++, 1000);
+      } catch(e) {
+        this.cookiesError = 'Invalid JSON or save failed: ' + e.message;
+      }
+    },
+
+    async generateQueries() {
+      this.generatingQueries = true;
+      const r = await fetch('/api/resume/active');
+      const {id} = await r.json();
+      const profiles = await fetch('/api/settings').then(r => r.json()).catch(() => ({profiles: []}));
+      // Trigger query generation for each profile
+      const pfResp = await fetch('/api/profiles');
+      if (pfResp.ok) {
+        const {profiles} = await pfResp.json();
+        for (const p of profiles) {
+          await fetch(`/api/profiles/${p.id}/queries`, {method: 'POST'});
+        }
+      }
+      // Mark setup complete
+      await fetch('/api/setup/complete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({}),
+      });
+      this.generatingQueries = false;
+      this.queriesDone = true;
+      setTimeout(() => this.step++, 1000);
+    },
+  };
+}
+</script>
+</body>
+</html>

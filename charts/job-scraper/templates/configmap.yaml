@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: job-scraper-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "job-scraper.labels" . | nindent 4 }}
+data:
+  LLM_BASE_URL: "http://{{ include "job-scraper.llm.name" . }}:{{ .Values.llm.port }}/v1"
+  LLM_MODEL: {{ .Values.config.llmModel | quote }}
+  DATA_DIR: {{ .Values.config.dataDir | quote }}
+  DB_PATH: "{{ .Values.config.dataDir }}/jobs.db"
+  SCORE_THRESHOLD: {{ .Values.config.scoreThreshold | quote }}
+  SCRAPE_INTERVAL_HOURS: {{ .Values.config.scrapeIntervalHours | quote }}
+  GHOSTED_DAYS: {{ .Values.config.ghostedDays | quote }}
+  GMAIL_FROM: {{ .Values.config.gmailFrom | quote }}
+  GMAIL_TO: {{ .Values.config.gmailTo | quote }}
+  GMAIL_SMTP_HOST: {{ .Values.config.gmailSmtpHost | quote }}
+  GMAIL_SMTP_PORT: {{ .Values.config.gmailSmtpPort | quote }}
+  SALARY_THRESHOLD_MXN: {{ .Values.config.salaryThresholdMxn | quote }}

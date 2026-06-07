@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Runs — Job Scraper{% endblock %}
+{% block nav_runs %}active{% endblock %}
+
+{% block content %}
+<div class="flex-1 overflow-y-auto p-6">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-xl font-semibold">Scrape Runs</h1>
+    <button onclick="triggerRun()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+      Run Now
+    </button>
+  </div>
+
+  {% if runs %}
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-slate-400 border-b border-slate-700 text-left">
+          <th class="pb-3 pr-6">ID</th>
+          <th class="pb-3 pr-6">Started</th>
+          <th class="pb-3 pr-6">Status</th>
+          <th class="pb-3 pr-6">Found</th>
+          <th class="pb-3 pr-6">New</th>
+          <th class="pb-3">Matched (≥70)</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800">
+        {% for run in runs %}
+        <tr class="hover:bg-slate-800/50">
+          <td class="py-3 pr-6 text-slate-500">#{{ run.id }}</td>
+          <td class="py-3 pr-6 text-slate-300">{{ run.started_at[:16] }}</td>
+          <td class="py-3 pr-6">
+            <span class="px-2 py-0.5 rounded text-xs
+              {% if run.status == 'completed' %}bg-emerald-900 text-emerald-300
+              {% elif run.status == 'running' %}bg-indigo-900 text-indigo-300
+              {% else %}bg-red-900 text-red-300{% endif %}">
+              {{ run.status }}
+            </span>
+          </td>
+          <td class="py-3 pr-6 text-slate-300">{{ run.jobs_found }}</td>
+          <td class="py-3 pr-6 text-emerald-400">+{{ run.new_jobs }}</td>
+          <td class="py-3 text-indigo-400">{{ run.jobs_matched }}</td>
+        </tr>
+        {% if run.error %}
+        <tr>
+          <td colspan="6" class="pb-2 text-xs text-red-400 px-1">{{ run.error }}</td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center py-20 text-slate-500">
+    <p>No runs yet. Click "Run Now" or wait for the scheduled scrape.</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+async function triggerRun() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Starting...';
+  const r = await fetch('/api/runs/trigger', {method: 'POST'});
+  if (r.ok) {
+    setTimeout(() => location.reload(), 2000);
+  }
+}
+</script>
+{% endblock %}

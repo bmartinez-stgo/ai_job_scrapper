@@ -1,0 +1,69 @@
+namespace: job-scraper
+
+app:
+  image:
+    repository: registry:5000/job-scraper
+    tag: prod-latest
+    pullPolicy: IfNotPresent
+  port: 8087
+  resources:
+    requests:
+      cpu: "500m"
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  nodeSelector: {}
+
+llm:
+  image:
+    repository: vllm/vllm-openai
+    tag: latest
+    pullPolicy: IfNotPresent
+  port: 8000
+  modelId: Qwen/Qwen2.5-7B-Instruct-AWQ
+  dtype: half
+  quantization: awq
+  maxModelLen: "8192"
+  gpuMemoryUtilization: "0.85"
+  hfHome: /var/cache/huggingface
+  runtimeClassName: nvidia
+  resources:
+    requests:
+      cpu: "4"
+      memory: 12Gi
+    limits:
+      cpu: "8"
+      memory: 16Gi
+  nodeSelector:
+    gpu: rtx2080ti
+
+config:
+  llmModel: Qwen/Qwen2.5-7B-Instruct-AWQ
+  dataDir: /data
+  scoreThreshold: "70"
+  scrapeIntervalHours: "6"
+  ghostedDays: "30"
+  gmailFrom: bernardo.martinez.stgo@gmail.com
+  gmailTo: bernardo.martinez.stgo@gmail.com
+  gmailSmtpHost: smtp.gmail.com
+  gmailSmtpPort: "587"
+  salaryThresholdMxn: "130000"
+
+pvc:
+  app:
+    storageClass: local-path
+    size: 20Gi
+  llm:
+    storageClass: local-path
+    size: 30Gi
+
+service:
+  type: ClusterIP
+  port: 8087
+
+ingress:
+  host: nahui-ai.ddns.net
+  tlsSecret: job-scraper-tls
+  basicAuthSecret: job-scraper-basic-auth
+  path: /job_scrapper

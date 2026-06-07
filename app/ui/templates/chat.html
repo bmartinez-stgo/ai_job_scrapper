@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Agent — Job Scraper{% endblock %}
+{% block nav_chat %}active{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-full" x-data="chatApp()" x-init="init()">
+
+  <!-- Messages -->
+  <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4" id="messages-container">
+    <template x-for="msg in messages" :key="msg.id">
+      <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+
+        <!-- User -->
+        <div x-show="msg.role === 'user'"
+             class="max-w-2xl bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 text-sm">
+          <span x-text="msg.content"></span>
+        </div>
+
+        <!-- Assistant -->
+        <div x-show="msg.role === 'assistant'"
+             class="max-w-3xl bg-slate-800 border border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 text-sm">
+          <div class="prose-chat text-slate-200" x-html="renderMarkdown(msg.content)"></div>
+        </div>
+
+        <!-- Tool call indicator -->
+        <div x-show="msg.role === 'tool_indicator'"
+             class="flex items-center gap-2 text-xs text-slate-400 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2">
+          <svg class="w-3 h-3 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+          </svg>
+          <span x-text="'Calling ' + msg.tool_name + '...'"></span>
+        </div>
+
+      </div>
+    </template>
+
+    <!-- Streaming indicator -->
+    <div x-show="streaming" class="flex justify-start">
+      <div class="max-w-3xl bg-slate-800 border border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 text-sm">
+        <div class="prose-chat text-slate-200" x-html="renderMarkdown(streamingContent)"></div>
+        <span x-show="streamingContent === ''" class="flex gap-1 mt-1">
+          <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+          <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+          <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+        </span>
+      </div>
+    </div>
+
+    <div id="scroll-anchor"></div>
+  </div>
+
+  <!-- Quick actions -->
+  <div class="px-6 py-2 flex gap-2 flex-wrap border-t border-slate-800">
+    <button @click="sendQuick('Show me my top job matches')"
+            class="quick-btn">Top matches</button>
+    <button @click="sendQuick('What is my current application pipeline?')"
+            class="quick-btn">Pipeline</button>
+    <button @click="sendQuick('Trigger a new job scrape')"
+            class="quick-btn">Scrape now</button>
+    <button @click="sendQuick('Show me remote Director-level roles')"
+            class="quick-btn">Remote Director roles</button>
+    <button @click="sendQuick('Show me jobs in Mexico')"
+            class="quick-btn">Mexico jobs</button>
+  </div>
+
+  <!-- Input -->
+  <div class="px-6 py-4 border-t border-slate-700">
+    <form @submit.prevent="sendMessage()" class="flex gap-3 items-end">
+      <textarea
+        x-model="input"
+        @keydown.enter.prevent="if (!$event.shiftKey) sendMessage()"
+        placeholder="Ask about jobs, pipeline, draft applications..."
+        rows="2"
+        class="flex-1 bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 resize-none focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+      ></textarea>
+      <button type="submit" :disabled="streaming || !input.trim()"
+              class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-xl px-4 py-3 transition-colors flex-shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+        </svg>
+      </button>
+    </form>
+    <p class="text-xs text-slate-600 mt-2">Enter to send · Shift+Enter for new line</p>
+  </div>
+</div>
+
+<style>
+  .quick-btn {
+    font-size: 0.75rem; padding: 4px 10px;
+    background: #1e293b; border: 1px solid #334155;
+    border-radius: 999px; color: #94a3b8;
+    cursor: pointer; transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .quick-btn:hover { background: #334155; color: #f1f5f9; }
+</style>
+
+<script>
+function chatApp() {
+  return {
+    messages: [],
+    input: '',
+    streaming: false,
+    streamingContent: '',
+    conversationId: null,
+    ws: null,
+    msgCounter: 0,
+
+    init() {
+      this.connectWS();
+      this.loadWelcome();
+    },
+
+    connectWS() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      this.ws = new WebSocket(`${proto}//${location.host}/ws/chat`);
+
+      this.ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        this.handleEvent(data);
+      };
+
+      this.ws.onclose = () => {
+        setTimeout(() => this.connectWS(), 3000);
+      };
+    },
+
+    handleEvent(data) {
+      if (data.type === 'conversation_id') {
+        this.conversationId = data.id;
+      } else if (data.type === 'token') {
+        this.streaming = true;
+        this.streamingContent += data.content;
+        this.scrollBottom();
+      } else if (data.type === 'tool_start') {
+        this.messages.push({ id: ++this.msgCounter, role: 'tool_indicator', tool_name: data.name });
+        this.scrollBottom();
+      } else if (data.type === 'tool_end') {
+        this.messages = this.messages.filter(m => m.role !== 'tool_indicator' || m.tool_name !== data.name);
+      } else if (data.type === 'done') {
+        if (this.streamingContent) {
+          this.messages.push({ id: ++this.msgCounter, role: 'assistant', content: this.streamingContent });
+        }
+        this.streaming = false;
+        this.streamingContent = '';
+        this.scrollBottom();
+      } else if (data.type === 'error') {
+        this.messages.push({ id: ++this.msgCounter, role: 'assistant', content: '⚠️ ' + data.content });
+        this.streaming = false;
+        this.streamingContent = '';
+      }
+    },
+
+    sendMessage() {
+      const text = this.input.trim();
+      if (!text || this.streaming) return;
+      this.messages.push({ id: ++this.msgCounter, role: 'user', content: text });
+      this.input = '';
+      this.streaming = true;
+      this.streamingContent = '';
+      this.scrollBottom();
+      this.ws.send(JSON.stringify({ message: text, conversation_id: this.conversationId }));
+    },
+
+    sendQuick(text) {
+      this.input = text;
+      this.sendMessage();
+    },
+
+    renderMarkdown(text) {
+      if (!text) return '';
+      try { return marked.parse(text); } catch { return text; }
+    },
+
+    scrollBottom() {
+      this.$nextTick(() => {
+        const el = document.getElementById('scroll-anchor');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      });
+    },
+
+    loadWelcome() {
+      this.messages.push({
+        id: ++this.msgCounter,
+        role: 'assistant',
+        content: "Hello! I'm your job search assistant. I have access to all your scraped job postings, your resume, and application pipeline.\n\nHow can I help you today? You can ask me to:\n- Show your top job matches\n- Draft a cover letter for a specific role\n- Update your application pipeline\n- Trigger a new job search\n- Blacklist a company",
+      });
+    },
+  };
+}
+</script>
+{% endblock %}
