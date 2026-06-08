@@ -3,7 +3,7 @@
 {% block nav_chat %}active{% endblock %}
 
 {% block content %}
-<div class="flex h-full relative">
+<div class="flex h-full relative" x-data="chatApp()" x-init="init()">
 
   <!-- Chat column -->
   <div class="flex flex-col flex-1 min-w-0" id="chat-column">
