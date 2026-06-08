@@ -68,13 +68,39 @@ async def submit_linkedin(db: Session, application_id: int) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+_SAME_SITE_MAP = {
+    "strict": "Strict",
+    "lax": "Lax",
+    "none": "None",
+    "no_restriction": "None",
+    "unspecified": "Lax",
+}
+
+
+def _sanitize_cookies(cookies: list[dict]) -> list[dict]:
+    out = []
+    for c in cookies:
+        c = dict(c)
+        ss = str(c.get("sameSite") or "").lower()
+        c["sameSite"] = _SAME_SITE_MAP.get(ss, "Lax")
+        # Playwright requires domain to start with dot for host cookies
+        if "domain" in c and c["domain"] and not c["domain"].startswith("."):
+            c["domain"] = "." + c["domain"]
+        # Drop fields Playwright doesn't accept
+        for key in ("hostOnly", "session", "storeId", "id"):
+            c.pop(key, None)
+        out.append(c)
+    return out
+
+
 def _load_cookies(db: Session, platform: str) -> list[dict] | None:
     session = db.query(PlatformSession).filter(PlatformSession.platform == platform).first()
     if not session:
         return None
     try:
         raw = decrypt(session.cookies_encrypted)
-        return json.loads(raw)
+        cookies = json.loads(raw)
+        return _sanitize_cookies(cookies)
     except Exception:
         return None
 
