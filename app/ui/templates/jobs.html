@@ -141,6 +141,13 @@
              class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded-lg transition-colors"
           >Open on LinkedIn ↗</a>
           <button
+            x-show="selected && selected.visa !== 'no_sponsorship'"
+            @click="markNoSponsorship()"
+            :disabled="actionLoading"
+            class="px-3 py-1.5 bg-slate-800 hover:bg-amber-900/50 border border-slate-700 text-slate-400 hover:text-amber-300 text-xs rounded-lg transition-colors"
+            title="Mark as no visa sponsorship — hides from future view"
+          >No Sponsorship</button>
+          <button
             @click="blacklistCompany()"
             :disabled="actionLoading"
             class="px-3 py-1.5 bg-slate-800 hover:bg-red-900/50 border border-slate-700 text-slate-400 hover:text-red-300 text-xs rounded-lg transition-colors"
@@ -394,6 +401,38 @@ function jobsApp() {
       } catch (_) {
         this.actionError = true;
         this.actionMessage = 'Error drafting application.';
+      } finally {
+        this.actionLoading = false;
+      }
+    },
+
+    async markNoSponsorship() {
+      if (!this.selected) return;
+      if (!confirm(`Mark "${this.selected.company} — ${this.selected.title}" as No Sponsorship?\nIt will be hidden from the default job list.`)) return;
+      this.actionLoading = true;
+      this.actionMessage = '';
+      try {
+        const r = await fetch(`${ROOT_PATH}/api/jobs/${this.selected.id}/visa`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({status: 'no_sponsorship'}),
+        });
+        const data = await r.json();
+        if (data.error) {
+          this.actionError = true;
+          this.actionMessage = data.error;
+        } else {
+          this.actionError = false;
+          this.actionMessage = 'Marked as no sponsorship — will be hidden from default view.';
+          await this.loadJobs();
+          // select next job if this one disappears from list
+          const still = this.jobs.find(j => j.id === this.selected.id);
+          if (!still) this.selected = null;
+          else this.selected = still;
+        }
+      } catch (_) {
+        this.actionError = true;
+        this.actionMessage = 'Error updating visa status.';
       } finally {
         this.actionLoading = false;
       }

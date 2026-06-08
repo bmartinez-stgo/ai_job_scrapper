@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 
 from sqlalchemy.orm import Session
@@ -18,7 +18,15 @@ NO_SPONSORSHIP_RE = re.compile(
     r"green\s*card|"
     r"no\s+work\s+permit|"
     r"authorized\s+to\s+work\s+in\s+(the\s+)?(us|u\.s\.|united\s+states|canada)|"
-    r"not\s+(eligible|able)\s+to\s+sponsor",
+    r"not\s+(eligible|able)\s+to\s+sponsor|"
+    r"cannot\s+sponsor|"
+    r"unable\s+to\s+(provide\s+|offer\s+)?(?:visa\s+)?sponsor|"
+    r"not\s+(?:be\s+able\s+to\s+)?support\s+(?:future\s+)?(?:visa\s+|h-?1b\s+)?sponsorship|"
+    r"does\s+not\s+(?:offer|provide|support)\s+(?:visa\s+|work\s+visa\s+|h-?1b\s+)?sponsorship|"
+    r"sponsorship\s+(?:is\s+)?not\s+(?:available|offered|provided)|"
+    r"not\s+(?:able\s+to\s+)?(?:provide|offer)\s+(?:work\s+)?(?:visa|immigration)\s+sponsorship|"
+    r"h-?1b\s+(?:visa\s+)?sponsorship\s+(?:is\s+)?(?:not|unavailable)|"
+    r"require[sd]?\s+(?:to\s+be\s+)?(?:legally\s+)?(?:authorized|eligible)\s+to\s+work",
     re.IGNORECASE,
 )
 
@@ -29,7 +37,7 @@ SPONSORS_RE = re.compile(
     re.IGNORECASE,
 )
 
-_executor = ThreadPoolExecutor(max_workers=2)
+_executor = ThreadPoolExecutor(max_workers=4)
 
 
 def _fingerprint(title: str, company: str, location: str) -> str:
@@ -52,11 +60,11 @@ def _scrape_us(search_term: str, location: str, remote_only: bool) -> list[dict]
     try:
         from jobspy import scrape_jobs
         df = scrape_jobs(
-            site_name=["linkedin", "indeed", "glassdoor", "zip_recruiter"],
+            site_name=["linkedin"],
             search_term=search_term,
             location=location,
-            results_wanted=30,
-            hours_old=96,
+            results_wanted=15,
+            hours_old=168,
             linkedin_fetch_description=True,
             is_remote=remote_only,
         )
@@ -95,22 +103,37 @@ def run_scrape(db: Session, run_id: int) -> dict:
     }
     profiles = db.query(RoleProfile).filter(RoleProfile.is_active == True).all()
 
-    raw_jobs: list[dict] = []
+    def _log_progress(msg: str):
+        run.progress_log = (run.progress_log or "") + f"{datetime.utcnow().strftime('%H:%M:%S')} {msg}\n"
+        db.commit()
 
+    raw_jobs: list[dict] = []
+    total_queries = sum(min(len(json.loads(p.search_queries_json or "[]")), 4) for p in profiles)
+    done = 0
     for profile in profiles:
         queries = json.loads(profile.search_queries_json or "[]")
-        for q in queries:
+        for q in queries[:4]:
             search_term = q.get("search_term", "")
             location = q.get("location", "United States")
             remote_only = q.get("remote_only", False)
-
-            if profile.market in ("us_ca", "both"):
-                raw_jobs.extend(_scrape_us(search_term, location, remote_only))
-            if profile.market in ("mx", "both"):
-                raw_jobs.extend(_scrape_mx(search_term))
+            done += 1
+            _log_progress(f"[{done}/{total_queries}] Searching: \"{search_term}\" in {location}")
+            try:
+                if profile.market in ("us_ca", "both"):
+                    results = _scrape_us(search_term, location, remote_only)
+                    raw_jobs.extend(results)
+                    _log_progress(f"  → {len(results)} results")
+                if profile.market in ("mx", "both"):
+                    results = _scrape_mx(search_term)
+                    raw_jobs.extend(results)
+                    _log_progress(f"  → {len(results)} results (MX)")
+            except Exception as e:
+                logger.warning("Query '%s' failed: %s", search_term, e)
+                _log_progress(f"  → ERROR: {e}")
 
     found = 0
     new = 0
+    seen_fps: set[str] = set()
     for raw in raw_jobs:
         title = str(raw.get("title") or "")
         company = str(raw.get("company") or "")
@@ -137,9 +160,12 @@ def run_scrape(db: Session, run_id: int) -> dict:
         fp = _fingerprint(title, company, location)
         found += 1
 
+        if fp in seen_fps:
+            continue
         existing = db.query(JobPosting).filter(JobPosting.fingerprint == fp).first()
         if existing:
             continue
+        seen_fps.add(fp)
 
         salary_min = raw.get("min_amount") or raw.get("salary_min")
         salary_max = raw.get("max_amount") or raw.get("salary_max")

@@ -147,6 +147,21 @@ async def draft_job_application(job_id: int, db: Session = Depends(get_db)):
     return result
 
 
+@router.post("/api/jobs/{job_id}/visa")
+async def set_visa_status(job_id: int, request: Request, db: Session = Depends(get_db)):
+    from app.models import JobPosting
+    body = await request.json()
+    status = body.get("status")
+    if status not in ("ok", "no_sponsorship", "unknown"):
+        return {"error": "status must be ok, no_sponsorship, or unknown"}
+    job = db.get(JobPosting, job_id)
+    if not job:
+        return {"error": "Not found"}
+    job.visa_status = status
+    db.commit()
+    return {"ok": True, "visa_status": status}
+
+
 @router.post("/api/jobs/{job_id}/blacklist")
 async def blacklist_job_company(job_id: int, db: Session = Depends(get_db)):
     from app.models import JobPosting, CompanyBlacklist
