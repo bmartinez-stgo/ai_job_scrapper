@@ -64,6 +64,12 @@
                       class="px-2 py-1 bg-indigo-700 hover:bg-indigo-600 text-white rounded text-xs">
                 Fill
               </button>
+              {% if app.url %}
+              <a href="{{ app.url }}" target="_blank" rel="noopener"
+                 class="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs">
+                Manual ↗
+              </a>
+              {% endif %}
               {% endif %}
               <select onchange="updateStage({{ app.id }}, this.value)" class="bg-slate-800 border border-slate-600 rounded text-xs text-slate-300 px-1">
                 <option value="">Update stage</option>
@@ -88,15 +94,16 @@
   <div class="text-center py-20 text-slate-500">
     <p class="text-lg">No applications yet.</p>
     <p class="text-sm mt-2">Ask the agent to draft an application for a matched job.</p>
-    <a href="/" class="mt-4 inline-block text-indigo-400 hover:underline text-sm">Open agent →</a>
+    <a href="{{ root_path }}/" class="mt-4 inline-block text-indigo-400 hover:underline text-sm">Open agent →</a>
   </div>
   {% endif %}
 
 </div>
 
 <script>
+const ROOT_PATH = "{{ root_path }}";
 async function approveApp(id) {
-  const r = await fetch(`/api/applications/${id}/approve`, {method: 'POST'});
+  const r = await fetch(`${ROOT_PATH}/api/applications/${id}/approve`, {method: 'POST'});
   const data = await r.json();
   if (data.ok) {
     alert('Filling in progress. Refresh to see screenshot.');
@@ -108,7 +115,7 @@ async function approveApp(id) {
 
 async function submitApp(id) {
   if (!confirm('Submit this application now?')) return;
-  const r = await fetch(`/api/applications/${id}/submit`, {method: 'POST'});
+  const r = await fetch(`${ROOT_PATH}/api/applications/${id}/submit`, {method: 'POST'});
   const data = await r.json();
   if (data.ok) {
     alert('Submitted!');
@@ -120,7 +127,7 @@ async function submitApp(id) {
 
 async function updateStage(id, stage) {
   if (!stage) return;
-  await fetch(`/api/applications/${id}/lifecycle`, {
+  await fetch(`${ROOT_PATH}/api/applications/${id}/lifecycle`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({stage}),

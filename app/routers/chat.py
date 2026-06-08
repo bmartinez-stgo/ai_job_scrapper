@@ -446,6 +446,111 @@ def _tool_reject(db: Session, application_id: int, reason: str = None) -> dict:
     return {"ok": True}
 
 
+@router.websocket("/ws/job-chat")
+async def job_chat_ws(ws: WebSocket, db: Session = Depends(get_db)):
+    await ws.accept()
+    current_job_id = None
+    messages: list[dict] = []
+    try:
+        while True:
+            data = await ws.receive_json()
+            job_id = data.get("job_id")
+            user_message = data.get("message", "").strip()
+            if not user_message:
+                continue
+            if job_id != current_job_id:
+                current_job_id = job_id
+                messages = []
+            job_ctx = _load_job_context(db, current_job_id)
+            if not job_ctx:
+                await ws.send_json({"type": "error", "content": "Job not found"})
+                continue
+            sys_prompt = _build_job_chat_prompt(db, job_ctx)
+            messages.append({"role": "user", "content": user_message})
+            full_messages = [{"role": "system", "content": sys_prompt}] + messages[-12:]
+            full_response = ""
+            async for event in llm.stream_chat(full_messages):
+                if event["type"] == "token":
+                    full_response += event["content"]
+                    await ws.send_json({"type": "token", "content": event["content"]})
+                elif event["type"] == "finish":
+                    break
+            if full_response:
+                messages.append({"role": "assistant", "content": full_response})
+            await ws.send_json({"type": "done"})
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.error("Job chat WS error: %s", e)
+        try:
+            await ws.send_json({"type": "error", "content": str(e)})
+        except Exception:
+            pass
+
+
+def _load_job_context(db: Session, job_id: int) -> dict | None:
+    from app.models import JobPosting, JobMatch
+    if not job_id:
+        return None
+    job = db.get(JobPosting, job_id)
+    if not job:
+        return None
+    match = db.query(JobMatch).filter(JobMatch.posting_id == job_id).first()
+    salary = ""
+    if job.salary_min and job.salary_max:
+        salary = f"{int(job.salary_min/1000)}k–{int(job.salary_max/1000)}k {job.salary_currency or 'USD'}"
+    elif job.salary_min:
+        salary = f"{int(job.salary_min/1000)}k+ {job.salary_currency or 'USD'}"
+    return {
+        "id": job.id,
+        "title": job.title,
+        "company": job.company,
+        "location": job.location,
+        "is_remote": job.is_remote,
+        "salary": salary,
+        "visa_status": job.visa_status,
+        "description": job.description or "",
+        "match": {
+            "score": match.score,
+            "reasoning": match.reasoning,
+            "highlights": json.loads(match.highlights_json or "[]"),
+            "red_flags": json.loads(match.red_flags_json or "[]"),
+        } if match else None,
+    }
+
+
+def _build_job_chat_prompt(db: Session, job: dict) -> str:
+    resume = db.query(Resume).filter(Resume.is_active == True).first()
+    resume_summary = ""
+    if resume and resume.structured_json:
+        try:
+            rj = json.loads(resume.structured_json)
+            resume_summary = rj.get("summary", "")
+        except Exception:
+            pass
+    match = job.get("match") or {}
+    highlights = ", ".join(match.get("highlights") or []) or "—"
+    red_flags = ", ".join(match.get("red_flags") or []) or "none"
+    return f"""You are a career advisor helping Bernardo Martinez evaluate this specific job opportunity.
+
+## Candidate
+{resume_summary}
+
+## Position: {job['title']} at {job['company']}
+Location: {job['location']}{'  (Remote)' if job.get('is_remote') else ''}
+Salary: {job.get('salary') or '—'}
+Visa sponsorship: {job.get('visa_status', 'unknown')}
+Match score: {match.get('score', '—')}/100
+Reasoning: {match.get('reasoning', '')}
+Strengths: {highlights}
+Red flags: {red_flags}
+
+## Job description
+{(job.get('description') or '')[:2500]}
+
+Be direct and strategic. Help evaluate fit, suggest how to position, draft cover letter sections, or advise on salary negotiation. Keep responses concise."""
+
+
 def _build_system_prompt(db: Session) -> str:
     resume = db.query(Resume).filter(Resume.is_active == True).first()
     resume_summary = ""

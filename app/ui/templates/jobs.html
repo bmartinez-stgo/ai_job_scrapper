@@ -49,22 +49,17 @@
     <div class="flex-1 overflow-y-auto">
       <div x-show="loading" class="p-8 text-center text-slate-500 text-sm">Loading…</div>
       <div x-show="!loading && jobs.length === 0"
-           class="p-8 text-center text-slate-500 text-sm">No jobs match the current filters.</div>
+           class="p-8 text-center text-slate-500 text-sm">No jobs match current filters.</div>
       <template x-for="job in jobs" :key="job.id">
         <div @click="selectJob(job)"
              :class="selected && selected.id === job.id
                ? 'bg-indigo-950/60 border-l-2 border-indigo-500'
                : 'border-l-2 border-transparent hover:bg-slate-800/50'"
              class="flex gap-2 px-3 py-3 cursor-pointer transition-colors">
-
-          <!-- Score -->
           <div class="w-8 flex-shrink-0 text-right pt-0.5">
-            <span :class="scoreClass(job.score)"
-                  class="text-xs font-bold"
+            <span :class="scoreClass(job.score)" class="text-xs font-bold"
                   x-text="job.score !== null && job.score !== undefined ? job.score : '—'"></span>
           </div>
-
-          <!-- Info -->
           <div class="min-w-0 flex-1">
             <p class="text-sm text-slate-200 font-medium leading-snug truncate" x-text="job.title"></p>
             <p class="text-xs text-slate-400 truncate mt-0.5" x-text="job.company"></p>
@@ -85,7 +80,7 @@
     </div>
   </div>
 
-  <!-- Right: detail -->
+  <!-- Right: detail + mini-chat -->
   <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
     <!-- Empty state -->
@@ -98,11 +93,11 @@
       <p class="text-sm">Select a job to view details</p>
     </div>
 
-    <!-- Detail view -->
-    <div x-show="selected" class="flex-1 overflow-y-auto">
+    <!-- When job selected -->
+    <div x-show="selected" class="flex-1 flex flex-col min-h-0">
 
-      <!-- Sticky header with actions -->
-      <div class="sticky top-0 z-10 bg-slate-900 border-b border-slate-700 px-6 py-4">
+      <!-- Sticky header -->
+      <div class="flex-shrink-0 bg-slate-900 border-b border-slate-700 px-6 py-4">
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">
             <h1 class="text-base font-semibold text-slate-100 leading-snug" x-text="selected && selected.title"></h1>
@@ -118,26 +113,17 @@
 
         <!-- Meta pills -->
         <div class="flex flex-wrap gap-1.5 mt-3 text-xs">
-          <span class="px-2 py-0.5 bg-slate-800 rounded text-slate-300"
-                x-text="selected && selected.location"></span>
-          <span x-show="selected && selected.is_remote"
-                class="px-2 py-0.5 bg-sky-900/60 rounded text-sky-300">Remote</span>
-          <span x-show="selected && selected.salary"
-                class="px-2 py-0.5 bg-slate-800 rounded text-slate-300"
-                x-text="selected && selected.salary"></span>
-          <span :class="selected && visaClass(selected.visa)"
-                class="px-2 py-0.5 rounded"
-                x-text="selected && (selected.visa === 'ok' ? 'Visa sponsorship ✓' : selected.visa === 'unknown' ? 'Visa unknown' : 'No sponsorship')"></span>
-          <span x-show="selected && selected.date_posted"
-                class="px-2 py-0.5 bg-slate-800 rounded text-slate-500"
+          <span class="px-2 py-0.5 bg-slate-800 rounded text-slate-300" x-text="selected && selected.location"></span>
+          <span x-show="selected && selected.is_remote" class="px-2 py-0.5 bg-sky-900/60 rounded text-sky-300">Remote</span>
+          <span x-show="selected && selected.salary" class="px-2 py-0.5 bg-slate-800 rounded text-slate-300" x-text="selected && selected.salary"></span>
+          <span :class="selected && visaClass(selected.visa)" class="px-2 py-0.5 rounded"
+                x-text="selected && (selected.visa === 'ok' ? 'Visa ✓' : selected.visa === 'unknown' ? 'Visa unknown' : 'No sponsorship')"></span>
+          <span x-show="selected && selected.date_posted" class="px-2 py-0.5 bg-slate-800 rounded text-slate-500"
                 x-text="'Posted: ' + (selected && selected.date_posted)"></span>
-          <span x-show="selected && selected.platform"
-                class="px-2 py-0.5 bg-slate-800 rounded text-slate-500"
-                x-text="selected && selected.platform"></span>
         </div>
 
-        <!-- Action buttons -->
-        <div class="flex gap-2 mt-3 flex-wrap">
+        <!-- Actions -->
+        <div class="flex gap-2 mt-3 flex-wrap items-center">
           <button
             x-show="selected && selected.match_id && !selected.application"
             @click="draftApplication()"
@@ -145,77 +131,112 @@
             class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs rounded-lg transition-colors"
             x-text="actionLoading ? 'Drafting…' : 'Draft Application'"
           ></button>
-          <a
-            x-show="selected && selected.application"
-            :href="ROOT_PATH + '/pipeline'"
-            class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs rounded-lg transition-colors"
-            x-text="'In Pipeline: ' + (selected && selected.application && selected.application.status)"
-          ></a>
-          <a
-            x-show="selected && selected.url"
-            :href="selected && selected.url"
-            target="_blank" rel="noopener"
-            class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded-lg transition-colors"
+          <a x-show="selected && selected.application"
+             :href="ROOT_PATH + '/pipeline'"
+             class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs rounded-lg transition-colors"
+             x-text="'In Pipeline: ' + (selected && selected.application && selected.application.status)"></a>
+          <a x-show="selected && selected.url"
+             :href="selected && selected.url"
+             target="_blank" rel="noopener"
+             class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded-lg transition-colors"
           >Open on LinkedIn ↗</a>
           <button
             @click="blacklistCompany()"
             :disabled="actionLoading"
             class="px-3 py-1.5 bg-slate-800 hover:bg-red-900/50 border border-slate-700 text-slate-400 hover:text-red-300 text-xs rounded-lg transition-colors"
           >Blacklist</button>
+          <p x-show="actionMessage" x-text="actionMessage"
+             :class="actionError ? 'text-red-400' : 'text-emerald-400'"
+             class="text-xs ml-1"></p>
         </div>
-
-        <!-- Feedback -->
-        <p x-show="actionMessage"
-           x-text="actionMessage"
-           :class="actionError ? 'text-red-400' : 'text-emerald-400'"
-           class="text-xs mt-2"></p>
       </div>
 
-      <!-- Body -->
-      <div class="px-6 py-5 space-y-6">
+      <!-- Detail body (scrollable) -->
+      <div class="overflow-y-auto min-h-0 px-6 py-5 space-y-5" style="flex: 1 1 0; min-height: 120px;">
+
+        <div x-show="detail && !detail.match" class="text-xs text-slate-500 italic">
+          This job has not been scored yet.
+        </div>
 
         <!-- Match analysis -->
         <div x-show="detail && detail.match">
-          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Match Analysis</h3>
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Match Analysis</h3>
           <p class="text-sm text-slate-300 leading-relaxed" x-text="detail && detail.match && detail.match.reasoning"></p>
-
           <div x-show="detail && detail.match && detail.match.highlights && detail.match.highlights.length" class="mt-3">
-            <p class="text-xs text-slate-500 mb-1.5">Strengths</p>
+            <p class="text-xs text-slate-500 mb-1">Strengths</p>
             <ul class="space-y-1">
               <template x-for="h in (detail && detail.match && detail.match.highlights || [])">
                 <li class="flex gap-2 text-sm text-emerald-300">
-                  <span class="text-emerald-500 flex-shrink-0 mt-0.5">✓</span>
-                  <span x-text="h"></span>
+                  <span class="text-emerald-500 flex-shrink-0">✓</span><span x-text="h"></span>
                 </li>
               </template>
             </ul>
           </div>
-
           <div x-show="detail && detail.match && detail.match.red_flags && detail.match.red_flags.length" class="mt-3">
-            <p class="text-xs text-slate-500 mb-1.5">Red Flags</p>
+            <p class="text-xs text-slate-500 mb-1">Red Flags</p>
             <ul class="space-y-1">
               <template x-for="f in (detail && detail.match && detail.match.red_flags || [])">
                 <li class="flex gap-2 text-sm text-amber-300">
-                  <span class="text-amber-500 flex-shrink-0 mt-0.5">⚠</span>
-                  <span x-text="f"></span>
+                  <span class="text-amber-500 flex-shrink-0">⚠</span><span x-text="f"></span>
                 </li>
               </template>
             </ul>
           </div>
-        </div>
-
-        <div x-show="detail && !detail.match"
-             class="text-xs text-slate-500 italic">
-          This job has not been scored yet. Run the matcher from the Runs page.
         </div>
 
         <!-- Description -->
         <div x-show="detail && detail.description">
-          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Job Description</h3>
-          <div class="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap"
-               x-text="detail && detail.description"></div>
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Job Description</h3>
+          <div class="text-sm text-slate-400 leading-relaxed whitespace-pre-wrap" x-text="detail && detail.description"></div>
         </div>
       </div>
+
+      <!-- Mini-chat -->
+      <div class="flex-shrink-0 border-t border-slate-700 flex flex-col bg-slate-900/80" style="height: 260px;">
+        <!-- Chat header -->
+        <div class="flex items-center justify-between px-4 py-2 border-b border-slate-800 flex-shrink-0">
+          <span class="text-xs text-slate-500 font-medium">Ask about this position</span>
+          <button @click="clearChat()" class="text-xs text-slate-600 hover:text-slate-400 transition-colors">Clear</button>
+        </div>
+        <!-- Messages -->
+        <div class="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-0" id="job-chat-messages">
+          <div x-show="chatMessages.length === 0 && !chatStreaming"
+               class="text-xs text-slate-600 italic text-center pt-2">
+            Ask about requirements, salary, how to position yourself…
+          </div>
+          <template x-for="msg in chatMessages" :key="msg.id">
+            <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+              <div :class="msg.role === 'user'
+                ? 'bg-indigo-600 text-white text-xs rounded-xl rounded-tr-sm px-3 py-1.5 max-w-xs'
+                : 'text-slate-300 text-xs max-w-sm leading-relaxed'">
+                <span x-text="msg.content"></span>
+              </div>
+            </div>
+          </template>
+          <div x-show="chatStreaming" class="flex justify-start">
+            <div class="text-slate-300 text-xs max-w-sm leading-relaxed" x-text="chatStreamContent || '…'"></div>
+          </div>
+          <div id="job-chat-anchor"></div>
+        </div>
+        <!-- Input -->
+        <div class="px-4 py-2 border-t border-slate-800 flex-shrink-0">
+          <form @submit.prevent="sendJobChat()" class="flex gap-2">
+            <input
+              x-model="chatInput"
+              :disabled="chatStreaming || !selected"
+              @keydown.enter.prevent="sendJobChat()"
+              placeholder="Ask about this role…"
+              class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+            >
+            <button type="submit"
+                    :disabled="chatStreaming || !chatInput.trim() || !selected"
+                    class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-lg text-xs transition-colors flex-shrink-0">
+              Send
+            </button>
+          </form>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -236,8 +257,82 @@ function jobsApp() {
     search: '',
     filters: { market: '', min_score: 0, remote_only: false, unscored: false },
 
+    // Mini-chat state
+    chatMessages: [],
+    chatInput: '',
+    chatStreaming: false,
+    chatStreamContent: '',
+    chatMsgCounter: 0,
+    chatWs: null,
+
     async init() {
+      this.initJobChat();
       await this.loadJobs();
+    },
+
+    initJobChat() {
+      if (this.chatWs && this.chatWs.readyState < 2) return;
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      this.chatWs = new WebSocket(`${proto}//${location.host}${ROOT_PATH}/ws/job-chat`);
+      this.chatWs.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === 'token') {
+          this.chatStreaming = true;
+          this.chatStreamContent += data.content;
+          this.scrollChatBottom();
+        } else if (data.type === 'done') {
+          if (this.chatStreamContent) {
+            this.chatMessages.push({
+              id: ++this.chatMsgCounter,
+              role: 'assistant',
+              content: this.chatStreamContent,
+            });
+          }
+          this.chatStreaming = false;
+          this.chatStreamContent = '';
+          this.scrollChatBottom();
+        } else if (data.type === 'error') {
+          this.chatMessages.push({
+            id: ++this.chatMsgCounter,
+            role: 'assistant',
+            content: '⚠️ ' + data.content,
+          });
+          this.chatStreaming = false;
+          this.chatStreamContent = '';
+        }
+      };
+      this.chatWs.onclose = () => {
+        setTimeout(() => this.initJobChat(), 3000);
+      };
+    },
+
+    sendJobChat() {
+      const text = this.chatInput.trim();
+      if (!text || !this.selected || this.chatStreaming) return;
+      if (!this.chatWs || this.chatWs.readyState !== 1) {
+        this.initJobChat();
+        setTimeout(() => this.sendJobChat(), 500);
+        return;
+      }
+      this.chatMessages.push({ id: ++this.chatMsgCounter, role: 'user', content: text });
+      this.chatInput = '';
+      this.chatStreaming = true;
+      this.chatStreamContent = '';
+      this.chatWs.send(JSON.stringify({ job_id: this.selected.id, message: text }));
+      this.scrollChatBottom();
+    },
+
+    clearChat() {
+      this.chatMessages = [];
+      this.chatStreamContent = '';
+      this.chatStreaming = false;
+    },
+
+    scrollChatBottom() {
+      this.$nextTick(() => {
+        const el = document.getElementById('job-chat-anchor');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      });
     },
 
     async loadJobs() {
@@ -264,6 +359,9 @@ function jobsApp() {
     },
 
     async selectJob(job) {
+      if (this.selected && this.selected.id !== job.id) {
+        this.clearChat();
+      }
       this.selected = job;
       this.detail = null;
       this.actionMessage = '';
@@ -286,7 +384,7 @@ function jobsApp() {
           this.actionMessage = data.error;
         } else {
           this.actionError = false;
-          this.actionMessage = 'Application drafted! Go to Pipeline to review and approve.';
+          this.actionMessage = 'Drafted! Go to Pipeline to review and approve.';
           await this.loadJobs();
           if (this.selected) {
             const refreshed = this.jobs.find(j => j.id === this.selected.id);
