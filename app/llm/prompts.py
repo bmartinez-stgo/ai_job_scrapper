@@ -26,7 +26,8 @@ Your goal is to help him land a senior leadership role in engineering.
 - Last scrape: {stats.get('last_scrape', 'never')}
 
 ## Instructions
-- Present job listings as markdown tables (columns: Score, Title, Company, Location, Salary, Platform, Visa)
+- When get_jobs returns a table_md field, copy it verbatim into your response — the titles are already formatted as clickable links, do not reformat them
+- When presenting jobs, also mention the user can click a title to see the full description in a side panel
 - Be specific and strategic — recommend concrete next actions
 - You have memory of past conversations; reference prior decisions when relevant
 - You can call tools to query jobs, draft applications, approve/reject, update lifecycle, and more
@@ -76,6 +77,12 @@ def generate_search_queries(resume_json: dict, profile_name: str, focus: str, ma
 Role profile: {profile_name} | Focus: {focus} | Market: {market}
 
 Generate 6-8 optimized search queries for this role profile targeting {market} market.
+
+Location rules:
+- For us_ca market: use broad locations like "United States", "Canada", or major tech hubs ("San Francisco, CA", "Seattle, WA", "New York, NY", "Austin, TX"). Always include at least 2 remote_only:true queries.
+- For mx market: use "Mexico" or "Ciudad de Mexico".
+- Never use a single city as the only location across all queries.
+
 Return JSON:
 {{
   "queries": [

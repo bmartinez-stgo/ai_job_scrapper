@@ -1,13 +1,12 @@
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from app.ui import templates
 
 from app.database import get_db
 from app.models import ScrapeRun
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/ui/templates")
 
 
 @router.get("/runs", response_class=HTMLResponse)
@@ -19,6 +18,52 @@ async def runs_page(request: Request, db: Session = Depends(get_db)):
 @router.get("/api/runs")
 async def list_runs(db: Session = Depends(get_db)):
     return {"runs": _get_runs(db)}
+
+
+@router.get("/api/runs/{run_id}")
+async def get_run(run_id: int, db: Session = Depends(get_db)):
+    run = db.get(ScrapeRun, run_id)
+    if not run:
+        return {"error": "Not found"}
+    return {
+        "id": run.id,
+        "status": run.status,
+        "jobs_found": run.jobs_found,
+        "new_jobs": run.new_jobs,
+        "jobs_matched": run.jobs_matched,
+        "error": run.error_message,
+        "progress_log": run.progress_log,
+        "started_at": str(run.started_at),
+        "completed_at": str(run.completed_at or ""),
+    }
+
+
+@router.get("/api/jobs/{job_id}")
+async def get_job_detail(job_id: int, db: Session = Depends(get_db)):
+    from app.models import JobPosting, JobMatch
+    job = db.get(JobPosting, job_id)
+    if not job:
+        return {"error": "Not found"}
+    match = db.query(JobMatch).filter(JobMatch.posting_id == job_id).first()
+    return {
+        "id": job.id,
+        "title": job.title,
+        "company": job.company,
+        "location": job.location,
+        "is_remote": job.is_remote,
+        "salary_min": job.salary_min,
+        "salary_max": job.salary_max,
+        "salary_currency": job.salary_currency,
+        "platform": job.platform,
+        "url": job.url,
+        "visa_status": job.visa_status,
+        "description": job.description or "",
+        "date_posted": str(job.date_posted or ""),
+        "match": {
+            "score": match.score,
+            "reasoning": match.reasoning,
+        } if match else None,
+    }
 
 
 @router.post("/api/runs/trigger")

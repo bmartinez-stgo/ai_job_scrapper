@@ -3,8 +3,8 @@ import logging
 from datetime import datetime, timedelta
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from app.ui import templates
 
 from app.database import get_db
 from app.models import Conversation, Message, Resume, RoleProfile, ScrapeRun, JobMatch, Application
@@ -13,7 +13,6 @@ from app.llm import prompts
 from app.config import settings
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/ui/templates")
 logger = logging.getLogger(__name__)
 
 TOOLS = [
@@ -103,7 +102,7 @@ async def root(request: Request, db: Session = Depends(get_db)):
     setup_done = db.query(AppSetting).filter(AppSetting.key == "setup_complete").first()
     if not setup_done or setup_done.value != "true":
         from fastapi.responses import RedirectResponse
-        return RedirectResponse(url="/setup")
+        return RedirectResponse(url="/job_scrapper/setup")
     return templates.TemplateResponse("chat.html", {"request": request})
 
 
@@ -114,8 +113,25 @@ async def chat_ws(ws: WebSocket, db: Session = Depends(get_db)):
     try:
         while True:
             data = await ws.receive_json()
+
+            # Client restoring a previous session
+            if data.get("type") == "restore":
+                cid = data.get("conversation_id")
+                conv = db.get(Conversation, cid) if cid else None
+                if conv:
+                    conversation_id = cid
+                    history = _load_history(db, conversation_id)
+                    await ws.send_json({
+                        "type": "history",
+                        "conversation_id": conversation_id,
+                        "messages": history,
+                    })
+                else:
+                    await ws.send_json({"type": "no_history"})
+                continue
+
             user_message = data.get("message", "").strip()
-            conversation_id = data.get("conversation_id")
+            conversation_id = data.get("conversation_id") or conversation_id
 
             if not user_message:
                 continue
@@ -256,7 +272,8 @@ async def _execute_tool(db: Session, name: str, args: dict) -> dict:
 
 def _tool_get_jobs(db: Session, min_score: int = 0, platform: str = None,
                    market: str = None, is_remote: bool = None,
-                   company: str = None, limit: int = 20, days_ago: int = None) -> dict:
+                   company: str = None, limit: int = 20, days_ago: int = None,
+                   **kwargs) -> dict:
     from app.models import JobPosting, JobMatch
     q = (
         db.query(JobPosting, JobMatch)
@@ -301,7 +318,15 @@ def _tool_get_jobs(db: Session, min_score: int = 0, platform: str = None,
             "posted": str(job.date_posted or ""),
         })
 
-    return {"jobs": jobs, "total": len(jobs)}
+    header = "| Score | Title | Company | Location | Salary | Visa |"
+    sep = "|-------|-------|---------|----------|--------|------|"
+    rows = [header, sep]
+    for j in jobs:
+        score = j["score"] if j["score"] is not None else "—"
+        title_link = f"[{j['title']}](#job-{j['id']})"
+        rows.append(f"| {score} | {title_link} | {j['company']} | {j['location']} | {j['salary']} | {j['visa']} |")
+
+    return {"jobs": jobs, "total": len(jobs), "table_md": "\n".join(rows)}
 
 
 def _tool_get_pipeline(db: Session) -> dict:

@@ -3,86 +3,104 @@
 {% block nav_chat %}active{% endblock %}
 
 {% block content %}
-<div class="flex flex-col h-full" x-data="chatApp()" x-init="init()">
+<div class="flex h-full relative">
 
-  <!-- Messages -->
-  <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4" id="messages-container">
-    <template x-for="msg in messages" :key="msg.id">
-      <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+  <!-- Chat column -->
+  <div class="flex flex-col flex-1 min-w-0" id="chat-column">
 
-        <!-- User -->
-        <div x-show="msg.role === 'user'"
-             class="max-w-2xl bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 text-sm">
-          <span x-text="msg.content"></span>
+    <!-- Messages -->
+    <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4" id="messages-container">
+      <template x-for="msg in messages" :key="msg.id">
+        <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
+
+          <!-- User -->
+          <div x-show="msg.role === 'user'"
+               class="max-w-2xl bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 text-sm">
+            <span x-text="msg.content"></span>
+          </div>
+
+          <!-- Assistant -->
+          <div x-show="msg.role === 'assistant'"
+               class="max-w-3xl bg-slate-800 border border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 text-sm">
+            <div class="prose-chat text-slate-200" x-html="renderMarkdown(msg.content)"></div>
+          </div>
+
+          <!-- Tool call indicator -->
+          <div x-show="msg.role === 'tool_indicator'"
+               class="flex items-center gap-2 text-xs text-slate-400 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2">
+            <svg class="w-3 h-3 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+            <span x-text="'Calling ' + msg.tool_name + '...'"></span>
+          </div>
+
         </div>
+      </template>
 
-        <!-- Assistant -->
-        <div x-show="msg.role === 'assistant'"
-             class="max-w-3xl bg-slate-800 border border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 text-sm">
-          <div class="prose-chat text-slate-200" x-html="renderMarkdown(msg.content)"></div>
+      <!-- Streaming indicator -->
+      <div x-show="streaming" class="flex justify-start">
+        <div class="max-w-3xl bg-slate-800 border border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 text-sm">
+          <div class="prose-chat text-slate-200" x-html="renderMarkdown(streamingContent)"></div>
+          <span x-show="streamingContent === ''" class="flex gap-1 mt-1">
+            <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+            <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+            <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+          </span>
         </div>
-
-        <!-- Tool call indicator -->
-        <div x-show="msg.role === 'tool_indicator'"
-             class="flex items-center gap-2 text-xs text-slate-400 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2">
-          <svg class="w-3 h-3 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-          </svg>
-          <span x-text="'Calling ' + msg.tool_name + '...'"></span>
-        </div>
-
       </div>
-    </template>
 
-    <!-- Streaming indicator -->
-    <div x-show="streaming" class="flex justify-start">
-      <div class="max-w-3xl bg-slate-800 border border-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 text-sm">
-        <div class="prose-chat text-slate-200" x-html="renderMarkdown(streamingContent)"></div>
-        <span x-show="streamingContent === ''" class="flex gap-1 mt-1">
-          <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:0ms"></span>
-          <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></span>
-          <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></span>
-        </span>
-      </div>
+      <div id="scroll-anchor"></div>
     </div>
 
-    <div id="scroll-anchor"></div>
+    <!-- Quick actions -->
+    <div class="px-6 py-2 flex gap-2 flex-wrap border-t border-slate-800">
+      <button @click="sendQuick('Show me my top job matches')"
+              class="quick-btn">Top matches</button>
+      <button @click="sendQuick('What is my current application pipeline?')"
+              class="quick-btn">Pipeline</button>
+      <button @click="sendQuick('Trigger a new job scrape')"
+              class="quick-btn">Scrape now</button>
+      <button @click="sendQuick('Show me remote Director-level roles')"
+              class="quick-btn">Remote Director roles</button>
+      <button @click="sendQuick('Show me jobs in Mexico')"
+              class="quick-btn">Mexico jobs</button>
+    </div>
+
+    <!-- Input -->
+    <div class="px-6 py-4 border-t border-slate-700">
+      <form @submit.prevent="sendMessage()" class="flex gap-3 items-end">
+        <textarea
+          x-model="input"
+          @keydown.enter.prevent="if (!$event.shiftKey) sendMessage()"
+          placeholder="Ask about jobs, pipeline, draft applications..."
+          rows="2"
+          class="flex-1 bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 resize-none focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+        ></textarea>
+        <button type="submit" :disabled="streaming || !input.trim()"
+                class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-xl px-4 py-3 transition-colors flex-shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+          </svg>
+        </button>
+      </form>
+      <p class="text-xs text-slate-600 mt-2">Enter to send · Shift+Enter for new line</p>
+    </div>
   </div>
 
-  <!-- Quick actions -->
-  <div class="px-6 py-2 flex gap-2 flex-wrap border-t border-slate-800">
-    <button @click="sendQuick('Show me my top job matches')"
-            class="quick-btn">Top matches</button>
-    <button @click="sendQuick('What is my current application pipeline?')"
-            class="quick-btn">Pipeline</button>
-    <button @click="sendQuick('Trigger a new job scrape')"
-            class="quick-btn">Scrape now</button>
-    <button @click="sendQuick('Show me remote Director-level roles')"
-            class="quick-btn">Remote Director roles</button>
-    <button @click="sendQuick('Show me jobs in Mexico')"
-            class="quick-btn">Mexico jobs</button>
-  </div>
+  <!-- Job detail panel -->
+  <aside id="job-panel"
+         class="hidden flex-col w-96 border-l border-slate-700 bg-slate-900 overflow-hidden flex-shrink-0"
+         style="max-height:100%">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-700 flex-shrink-0">
+      <h2 class="text-sm font-semibold text-slate-200 truncate mr-2" id="panel-title">Job Details</h2>
+      <button onclick="closePanel()" class="text-slate-400 hover:text-slate-100 text-xl leading-none flex-shrink-0">&times;</button>
+    </div>
+    <div class="flex-1 overflow-y-auto px-4 py-4 text-sm" id="panel-body">
+      <div class="text-slate-500">Loading...</div>
+    </div>
+  </aside>
 
-  <!-- Input -->
-  <div class="px-6 py-4 border-t border-slate-700">
-    <form @submit.prevent="sendMessage()" class="flex gap-3 items-end">
-      <textarea
-        x-model="input"
-        @keydown.enter.prevent="if (!$event.shiftKey) sendMessage()"
-        placeholder="Ask about jobs, pipeline, draft applications..."
-        rows="2"
-        class="flex-1 bg-slate-800 border border-slate-600 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 resize-none focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-      ></textarea>
-      <button type="submit" :disabled="streaming || !input.trim()"
-              class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-xl px-4 py-3 transition-colors flex-shrink-0">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-        </svg>
-      </button>
-    </form>
-    <p class="text-xs text-slate-600 mt-2">Enter to send · Shift+Enter for new line</p>
-  </div>
 </div>
 
 <style>
@@ -94,9 +112,13 @@
     white-space: nowrap;
   }
   .quick-btn:hover { background: #334155; color: #f1f5f9; }
+  #job-panel { display: none; }
+  #job-panel.open { display: flex; }
 </style>
 
 <script>
+const ROOT_PATH = "{{ root_path }}";
+
 function chatApp() {
   return {
     messages: [],
@@ -108,13 +130,23 @@ function chatApp() {
     msgCounter: 0,
 
     init() {
+      this.conversationId = localStorage.getItem('conversation_id') || null;
       this.connectWS();
-      this.loadWelcome();
+      this.setupLinkInterceptor();
     },
 
     connectWS() {
+      if (this.ws && this.ws.readyState < 2) return;
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      this.ws = new WebSocket(`${proto}//${location.host}/ws/chat`);
+      this.ws = new WebSocket(`${proto}//${location.host}/job_scrapper/ws/chat`);
+
+      this.ws.onopen = () => {
+        if (this.conversationId) {
+          this.ws.send(JSON.stringify({type: 'restore', conversation_id: this.conversationId}));
+        } else {
+          this.loadWelcome();
+        }
+      };
 
       this.ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
@@ -122,13 +154,28 @@ function chatApp() {
       };
 
       this.ws.onclose = () => {
-        setTimeout(() => this.connectWS(), 3000);
+        setTimeout(() => this.connectWS(), 5000);
       };
     },
 
     handleEvent(data) {
-      if (data.type === 'conversation_id') {
+      if (data.type === 'history') {
+        this.conversationId = data.conversation_id;
+        localStorage.setItem('conversation_id', data.conversation_id);
+        for (const m of data.messages) {
+          if (m.role === 'user' || m.role === 'assistant') {
+            this.messages.push({id: ++this.msgCounter, role: m.role, content: m.content});
+          }
+        }
+        if (this.messages.length === 0) this.loadWelcome();
+        this.scrollBottom();
+      } else if (data.type === 'no_history') {
+        this.conversationId = null;
+        localStorage.removeItem('conversation_id');
+        this.loadWelcome();
+      } else if (data.type === 'conversation_id') {
         this.conversationId = data.id;
+        localStorage.setItem('conversation_id', data.id);
       } else if (data.type === 'token') {
         this.streaming = true;
         this.streamingContent += data.content;
@@ -187,7 +234,87 @@ function chatApp() {
         content: "Hello! I'm your job search assistant. I have access to all your scraped job postings, your resume, and application pipeline.\n\nHow can I help you today? You can ask me to:\n- Show your top job matches\n- Draft a cover letter for a specific role\n- Update your application pipeline\n- Trigger a new job search\n- Blacklist a company",
       });
     },
+
+    setupLinkInterceptor() {
+      document.getElementById('messages-container').addEventListener('click', function(e) {
+        const a = e.target.closest('a');
+        if (!a) return;
+        const href = a.getAttribute('href') || '';
+        if (href.startsWith('#job-')) {
+          e.preventDefault();
+          showJobPanel(href.slice(5));
+        } else if (href && (href.startsWith('http') || href.startsWith('/'))) {
+          e.preventDefault();
+          window.open(href, '_blank', 'noopener');
+        }
+      });
+    },
   };
+}
+
+async function showJobPanel(jobId) {
+  const panel = document.getElementById('job-panel');
+  const body = document.getElementById('panel-body');
+  const titleEl = document.getElementById('panel-title');
+  panel.classList.add('open');
+  body.innerHTML = '<div class="text-slate-500">Loading...</div>';
+  titleEl.textContent = 'Loading...';
+
+  try {
+    const r = await fetch(`${ROOT_PATH}/api/jobs/${jobId}`);
+    const job = await r.json();
+    if (job.error) {
+      body.innerHTML = '<div class="text-red-400">Job not found.</div>';
+      return;
+    }
+
+    titleEl.textContent = job.title;
+
+    let salary = '—';
+    if (job.salary_min && job.salary_max) {
+      salary = `${Math.round(job.salary_min/1000)}k–${Math.round(job.salary_max/1000)}k ${job.salary_currency || 'USD'}`;
+    } else if (job.salary_min) {
+      salary = `${Math.round(job.salary_min/1000)}k+ ${job.salary_currency || 'USD'}`;
+    }
+
+    const scoreHtml = job.match ? `
+      <div class="flex items-baseline gap-2 mb-2">
+        <span class="text-3xl font-bold text-indigo-400">${job.match.score}</span>
+        <span class="text-slate-500 text-xs">match score</span>
+      </div>
+      ${job.match.reasoning ? `<p class="text-slate-400 text-xs mb-3 leading-relaxed">${escHtml(job.match.reasoning)}</p>` : ''}
+    ` : '';
+
+    const desc = escHtml(job.description || '').slice(0, 4000).replace(/\n/g, '<br>');
+
+    body.innerHTML = `
+      ${scoreHtml}
+      <div class="space-y-1 text-xs text-slate-400 mb-4 pb-4 border-b border-slate-700">
+        <div class="text-slate-200 font-medium">${escHtml(job.company)}</div>
+        <div>${escHtml(job.location)}${job.is_remote ? ' · Remote' : ''}</div>
+        <div>Salary: ${salary}</div>
+        <div>Visa: <span class="${job.visa_status === 'ok' ? 'text-emerald-400' : job.visa_status === 'no_sponsorship' ? 'text-red-400' : 'text-slate-400'}">${job.visa_status}</span></div>
+        ${job.date_posted ? `<div>Posted: ${escHtml(job.date_posted)}</div>` : ''}
+      </div>
+      ${job.url ? `<a href="${escHtml(job.url)}" target="_blank" rel="noopener" class="inline-block mb-4 text-xs text-indigo-400 hover:underline">View on LinkedIn →</a>` : ''}
+      ${desc ? `<div class="text-xs text-slate-400 leading-relaxed">${desc}</div>` : '<div class="text-slate-500 text-xs">No description available.</div>'}
+    `;
+  } catch(err) {
+    body.innerHTML = '<div class="text-red-400">Error loading details.</div>';
+  }
+}
+
+function closePanel() {
+  const panel = document.getElementById('job-panel');
+  panel.classList.remove('open');
+}
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 </script>
 {% endblock %}
