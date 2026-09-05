@@ -4,7 +4,7 @@ app:
   image:
     repository: registry:5000/job-scraper
     tag: prod-latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   port: 8087
   resources:
     requests:
@@ -64,6 +64,6 @@ service:
 
 ingress:
   host: nahui-ai.ddns.net
-  tlsSecret: job-scraper-tls
+  tlsSecret: nahui-ai-tls
   basicAuthSecret: job-scraper-basic-auth
   path: /job_scrapper

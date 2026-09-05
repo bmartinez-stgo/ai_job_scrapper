@@ -97,12 +97,13 @@
 </style>
 
 <script>
+const ROOT_PATH = "{{ root_path }}";
 async function saveSettings(e) {
   e.preventDefault();
   const form = e.target;
   const data = {};
   new FormData(form).forEach((v, k) => data[k] = v);
-  await fetch('/api/settings', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
+  await fetch(`${ROOT_PATH}/api/settings`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
   alert('Saved');
 }
 
@@ -111,7 +112,7 @@ async function saveCookies(platform) {
   if (!raw) return;
   try {
     const cookies = JSON.parse(raw);
-    const r = await fetch(`/api/session/${platform}/cookies`, {
+    const r = await fetch(`${ROOT_PATH}/api/session/${platform}/cookies`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({cookies}),
@@ -127,14 +128,14 @@ async function generateQueries(profileId) {
   const btn = event.target;
   btn.disabled = true;
   btn.textContent = 'Generating...';
-  await fetch(`/api/profiles/${profileId}/queries`, {method: 'POST'});
+  await fetch(`${ROOT_PATH}/api/profiles/${profileId}/queries`, {method: 'POST'});
   btn.textContent = '✓ Done';
   setTimeout(() => { btn.textContent = 'Regenerate queries'; btn.disabled = false; }, 2000);
 }
 
 async function removeBlacklist(id) {
   if (!confirm('Remove from blacklist?')) return;
-  await fetch(`/api/blacklist/${id}`, {method: 'DELETE'});
+  await fetch(`${ROOT_PATH}/api/blacklist/${id}`, {method: 'DELETE'});
   location.reload();
 }
 </script>

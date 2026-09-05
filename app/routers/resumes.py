@@ -2,8 +2,8 @@ import json
 import os
 from fastapi import APIRouter, Depends, UploadFile, File, Form, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from app.ui import templates
 
 from app.database import get_db
 from app.models import Resume, RoleProfile
@@ -12,7 +12,6 @@ from app.llm import prompts
 from app.config import settings
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/ui/templates")
 
 DEFAULT_PROFILES = [
     {"name": "Senior Manager SRE", "focus": "sre", "market": "us_ca",

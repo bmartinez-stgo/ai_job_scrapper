@@ -2,15 +2,14 @@ import json
 from datetime import datetime
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, FileResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from app.ui import templates
 
 from app.database import get_db
 from app.models import Application, ApplicationLifecycle, JobMatch, JobPosting
 from app.services import filler
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/ui/templates")
 
 
 @router.get("/pipeline", response_class=HTMLResponse)

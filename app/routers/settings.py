@@ -1,8 +1,8 @@
 import json
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from app.ui import templates
 
 from app.database import get_db
 from app.models import AppSetting, PlatformSession, RoleProfile, CompanyBlacklist
@@ -10,7 +10,6 @@ from app.services.crypto import encrypt
 from app.config import settings as app_settings
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/ui/templates")
 
 
 @router.get("/setup", response_class=HTMLResponse)

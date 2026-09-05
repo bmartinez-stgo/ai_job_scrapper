@@ -98,7 +98,7 @@
     <div class="text-5xl">🎯</div>
     <h2 class="text-xl font-semibold">You're all set!</h2>
     <p class="text-slate-400 text-sm">The scraper will run automatically every few hours. You can also trigger it manually from the agent.</p>
-    <a href="/" class="btn-primary inline-block">Open Agent</a>
+    <a href="{{ root_path }}/" class="btn-primary inline-block">Open Agent</a>
   </div>
 
 </div>
@@ -114,6 +114,7 @@
 </style>
 
 <script>
+const ROOT_PATH = "{{ root_path }}";
 function setup() {
   return {
     step: 0,
@@ -155,7 +156,7 @@ function setup() {
           this.uploadError = 'Provide a file or paste text.';
           return;
         }
-        const r = await fetch('/api/resume', {method: 'POST', body: form});
+        const r = await fetch(`${ROOT_PATH}/api/resume`, {method: 'POST', body: form});
         if (!r.ok) throw new Error('Upload failed');
         this.uploadDone = true;
         setTimeout(() => this.step++, 1000);
@@ -167,7 +168,7 @@ function setup() {
     },
 
     async saveGmail() {
-      await fetch('/api/setup/complete', {
+      await fetch(`${ROOT_PATH}/api/setup/complete`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({gmail_app_password: this.gmailPassword}),
@@ -179,7 +180,7 @@ function setup() {
       this.cookiesError = '';
       try {
         const cookies = JSON.parse(this.linkedinCookies);
-        const r = await fetch('/api/session/linkedin/cookies', {
+        const r = await fetch(`${ROOT_PATH}/api/session/linkedin/cookies`, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({cookies}),
@@ -194,19 +195,16 @@ function setup() {
 
     async generateQueries() {
       this.generatingQueries = true;
-      const r = await fetch('/api/resume/active');
+      const r = await fetch(`${ROOT_PATH}/api/resume/active`);
       const {id} = await r.json();
-      const profiles = await fetch('/api/settings').then(r => r.json()).catch(() => ({profiles: []}));
-      // Trigger query generation for each profile
-      const pfResp = await fetch('/api/profiles');
+      const pfResp = await fetch(`${ROOT_PATH}/api/profiles`);
       if (pfResp.ok) {
         const {profiles} = await pfResp.json();
         for (const p of profiles) {
-          await fetch(`/api/profiles/${p.id}/queries`, {method: 'POST'});
+          await fetch(`${ROOT_PATH}/api/profiles/${p.id}/queries`, {method: 'POST'});
         }
       }
-      // Mark setup complete
-      await fetch('/api/setup/complete', {
+      await fetch(`${ROOT_PATH}/api/setup/complete`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({}),
