@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import re
+import unicodedata
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
 
@@ -22,11 +23,13 @@ NO_SPONSORSHIP_RE = re.compile(
     r"cannot\s+sponsor|"
     r"unable\s+to\s+(provide\s+|offer\s+)?(?:visa\s+)?sponsor|"
     r"not\s+(?:be\s+able\s+to\s+)?support\s+(?:future\s+)?(?:visa\s+|h-?1b\s+)?sponsorship|"
+    r"support\s+future\s+h-?1b\s+(?:visa\s+)?sponsorship|"
     r"does\s+not\s+(?:offer|provide|support)\s+(?:visa\s+|work\s+visa\s+|h-?1b\s+)?sponsorship|"
     r"sponsorship\s+(?:is\s+)?not\s+(?:available|offered|provided)|"
     r"not\s+(?:able\s+to\s+)?(?:provide|offer)\s+(?:work\s+)?(?:visa|immigration)\s+sponsorship|"
     r"h-?1b\s+(?:visa\s+)?sponsorship\s+(?:is\s+)?(?:not|unavailable)|"
-    r"require[sd]?\s+(?:to\s+be\s+)?(?:legally\s+)?(?:authorized|eligible)\s+to\s+work",
+    r"require[sd]?\s+(?:to\s+be\s+)?(?:legally\s+)?(?:authorized|eligible)\s+to\s+work|"
+    r"not\s+(?:be\s+)?able\s+to\s+(?:employ|hire)\s+candidates.{0,120}visa\s+categor",
     re.IGNORECASE,
 )
 
@@ -38,6 +41,10 @@ SPONSORS_RE = re.compile(
 )
 
 _executor = ThreadPoolExecutor(max_workers=4)
+
+
+def _ascii_lower(s: str) -> str:
+    return unicodedata.normalize('NFD', s).encode('ascii', 'ignore').decode().lower()
 
 
 def _fingerprint(title: str, company: str, location: str) -> str:
@@ -60,10 +67,10 @@ def _scrape_us(search_term: str, location: str, remote_only: bool) -> list[dict]
     try:
         from jobspy import scrape_jobs
         df = scrape_jobs(
-            site_name=["linkedin"],
+            site_name=["linkedin", "google", "glassdoor"],
             search_term=search_term,
             location=location,
-            results_wanted=15,
+            results_wanted=25,
             hours_old=168,
             linkedin_fetch_description=True,
             is_remote=remote_only,
@@ -76,16 +83,17 @@ def _scrape_us(search_term: str, location: str, remote_only: bool) -> list[dict]
         return []
 
 
-def _scrape_mx(search_term: str) -> list[dict]:
+def _scrape_mx(search_term: str, location: str = "México") -> list[dict]:
     try:
         from jobspy import scrape_jobs
         df = scrape_jobs(
-            site_name=["indeed"],
+            site_name=["indeed", "linkedin", "google"],
             search_term=search_term,
-            location="México",
+            location=location,
             results_wanted=20,
             hours_old=96,
             country_indeed="Mexico",
+            linkedin_fetch_description=True,
         )
         if df is None or df.empty:
             return []
@@ -124,7 +132,7 @@ def run_scrape(db: Session, run_id: int) -> dict:
                     raw_jobs.extend(results)
                     _log_progress(f"  → {len(results)} results")
                 if profile.market in ("mx", "both"):
-                    results = _scrape_mx(search_term)
+                    results = _scrape_mx(search_term, location)
                     raw_jobs.extend(results)
                     _log_progress(f"  → {len(results)} results (MX)")
             except Exception as e:
@@ -142,7 +150,14 @@ def run_scrape(db: Session, run_id: int) -> dict:
         url = str(raw.get("job_url") or raw.get("url") or "")
         platform = str(raw.get("site") or "unknown")
         is_remote = bool(raw.get("is_remote") or raw.get("remote") or False)
-        market = "mx" if "mexico" in location.lower() or "mx" in platform.lower() else "us_ca"
+        loc_ascii = _ascii_lower(location)
+        is_mx = (
+            "mexico" in loc_ascii
+            or loc_ascii.endswith(", mx")
+            or ", mx," in loc_ascii
+            or "mx" in platform.lower()
+        )
+        market = "mx" if is_mx else "us_ca"
 
         if not title or not company:
             continue

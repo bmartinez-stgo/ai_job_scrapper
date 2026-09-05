@@ -37,6 +37,7 @@ class ScrapeRun(Base):
     new_jobs = Column(Integer, default=0)
     jobs_matched = Column(Integer, default=0)
     error_message = Column(Text, nullable=True)
+    progress_log = Column(Text, nullable=True)  # newline-separated progress entries
 
 
 class JobPosting(Base):

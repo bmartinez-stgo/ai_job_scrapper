@@ -531,24 +531,28 @@ def _build_job_chat_prompt(db: Session, job: dict) -> str:
     match = job.get("match") or {}
     highlights = ", ".join(match.get("highlights") or []) or "—"
     red_flags = ", ".join(match.get("red_flags") or []) or "none"
-    return f"""You are a career advisor helping Bernardo Martinez evaluate this specific job opportunity.
+    return f"""You are a concise Q&A assistant for a specific job posting. Answer only what is asked — no unsolicited advice, no cover letters, no extra suggestions unless explicitly requested.
 
-## Candidate
-{resume_summary}
+Response rules:
+- Factual questions (salary, location, requirements): one short paragraph, facts only.
+- Yes/no questions: answer yes or no, add one sentence of context maximum.
+- Only draft cover letter content when the user explicitly asks for it.
+- Never exceed 4 sentences unless the user asks for a detailed breakdown.
+- Answer in the same language the user writes in.
 
-## Position: {job['title']} at {job['company']}
-Location: {job['location']}{'  (Remote)' if job.get('is_remote') else ''}
-Salary: {job.get('salary') or '—'}
-Visa sponsorship: {job.get('visa_status', 'unknown')}
+## Job: {job['title']} at {job['company']}
+Location: {job['location']}{'  · Remote' if job.get('is_remote') else ''}
+Salary: {job.get('salary') or 'not specified'}
+Visa: {job.get('visa_status', 'unknown')}
 Match score: {match.get('score', '—')}/100
-Reasoning: {match.get('reasoning', '')}
 Strengths: {highlights}
 Red flags: {red_flags}
 
-## Job description
-{(job.get('description') or '')[:2500]}
+## Candidate summary
+{resume_summary}
 
-Be direct and strategic. Help evaluate fit, suggest how to position, draft cover letter sections, or advise on salary negotiation. Keep responses concise."""
+## Job description
+{(job.get('description') or '')[:2000]}"""
 
 
 def _build_system_prompt(db: Session) -> str:

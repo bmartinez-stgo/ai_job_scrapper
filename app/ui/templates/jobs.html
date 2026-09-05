@@ -42,6 +42,12 @@
           Unscored
         </label>
         <span class="ml-auto text-slate-500" x-text="jobs.length + ' jobs'"></span>
+        <button @click="rescanVisa()" :disabled="rescanning"
+                class="text-xs text-slate-500 hover:text-slate-300 disabled:opacity-40 transition-colors"
+                :title="rescanMsg || 'Re-check visa status on all unknown jobs'">
+          <span x-show="!rescanning">Rescan visa</span>
+          <span x-show="rescanning">Scanning…</span>
+        </button>
       </div>
     </div>
 
@@ -115,7 +121,9 @@
         <div class="flex flex-wrap gap-1.5 mt-3 text-xs">
           <span class="px-2 py-0.5 bg-slate-800 rounded text-slate-300" x-text="selected && selected.location"></span>
           <span x-show="selected && selected.is_remote" class="px-2 py-0.5 bg-sky-900/60 rounded text-sky-300">Remote</span>
-          <span x-show="selected && selected.salary" class="px-2 py-0.5 bg-slate-800 rounded text-slate-300" x-text="selected && selected.salary"></span>
+          <span x-show="selected && (selected.salary || selected._salary_hint)"
+                class="px-2 py-0.5 bg-slate-800 rounded text-slate-300"
+                x-text="(selected && selected.salary) || (selected && selected._salary_hint)"></span>
           <span :class="selected && visaClass(selected.visa)" class="px-2 py-0.5 rounded"
                 x-text="selected && (selected.visa === 'ok' ? 'Visa ✓' : selected.visa === 'unknown' ? 'Visa unknown' : 'No sponsorship')"></span>
           <span x-show="selected && selected.date_posted" class="px-2 py-0.5 bg-slate-800 rounded text-slate-500"
@@ -139,7 +147,8 @@
              :href="selected && selected.url"
              target="_blank" rel="noopener"
              class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs rounded-lg transition-colors"
-          >Open on LinkedIn ↗</a>
+             x-text="'Open on ' + (selected && selected.platform ? selected.platform.charAt(0).toUpperCase() + selected.platform.slice(1) : 'Job Board') + ' ↗'"
+          ></a>
           <button
             x-show="selected && selected.visa !== 'no_sponsorship'"
             @click="markNoSponsorship()"
@@ -158,8 +167,23 @@
         </div>
       </div>
 
-      <!-- Detail body (scrollable) -->
-      <div class="overflow-y-auto min-h-0 px-6 py-5 space-y-5" style="flex: 1 1 0; min-height: 120px;">
+      <!-- Tab bar -->
+      <div class="flex-shrink-0 flex border-b border-slate-700 bg-slate-900">
+        <button @click="activeTab='details'"
+                :class="activeTab==='details' ? 'text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-500 hover:text-slate-300 border-b-2 border-transparent'"
+                class="px-5 py-2.5 text-xs font-medium transition-colors">Details</button>
+        <button @click="activeTab='chat'"
+                :class="activeTab==='chat' ? 'text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-500 hover:text-slate-300 border-b-2 border-transparent'"
+                class="px-5 py-2.5 text-xs font-medium transition-colors flex items-center gap-1.5">
+          Chat
+          <span x-show="chatMessages.length > 0"
+                class="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
+        </button>
+      </div>
+
+      <!-- Details tab -->
+      <div x-show="activeTab === 'details'"
+           class="flex-1 overflow-y-auto min-h-0 px-6 py-5 space-y-5">
 
         <div x-show="detail && !detail.match" class="text-xs text-slate-500 italic">
           This job has not been scored yet.
@@ -198,47 +222,61 @@
         </div>
       </div>
 
-      <!-- Mini-chat -->
-      <div class="flex-shrink-0 border-t border-slate-700 flex flex-col bg-slate-900/80" style="height: 260px;">
-        <!-- Chat header -->
-        <div class="flex items-center justify-between px-4 py-2 border-b border-slate-800 flex-shrink-0">
-          <span class="text-xs text-slate-500 font-medium">Ask about this position</span>
-          <button @click="clearChat()" class="text-xs text-slate-600 hover:text-slate-400 transition-colors">Clear</button>
-        </div>
+      <!-- Chat tab -->
+      <div x-show="activeTab === 'chat'"
+           class="flex-1 flex flex-col min-h-0 overflow-hidden">
         <!-- Messages -->
-        <div class="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-0" id="job-chat-messages">
+        <div class="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0" id="job-chat-messages">
           <div x-show="chatMessages.length === 0 && !chatStreaming"
-               class="text-xs text-slate-600 italic text-center pt-2">
-            Ask about requirements, salary, how to position yourself…
+               class="flex flex-col items-center justify-center h-full gap-2 text-slate-600 select-none pt-8">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                    d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+            </svg>
+            <p class="text-xs">Ask about requirements, salary, or how to position yourself</p>
           </div>
           <template x-for="msg in chatMessages" :key="msg.id">
             <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'">
-              <div :class="msg.role === 'user'
-                ? 'bg-indigo-600 text-white text-xs rounded-xl rounded-tr-sm px-3 py-1.5 max-w-xs'
-                : 'text-slate-300 text-xs max-w-sm leading-relaxed'">
-                <span x-text="msg.content"></span>
-              </div>
+              <div x-show="msg.role === 'user'"
+                   class="bg-indigo-600 text-white text-sm rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[80%]"
+                   x-text="msg.content"></div>
+              <div x-show="msg.role === 'assistant'"
+                   class="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 max-w-[85%] prose-chat"
+                   x-html="renderMarkdown(msg.content)"></div>
             </div>
           </template>
+          <!-- Streaming -->
           <div x-show="chatStreaming" class="flex justify-start">
-            <div class="text-slate-300 text-xs max-w-sm leading-relaxed" x-text="chatStreamContent || '…'"></div>
+            <div class="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 max-w-[85%] prose-chat">
+              <span x-show="chatStreamContent" x-html="renderMarkdown(chatStreamContent)"></span>
+              <span x-show="!chatStreamContent" class="flex gap-1 items-center h-5">
+                <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:0ms"></span>
+                <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:150ms"></span>
+                <span class="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style="animation-delay:300ms"></span>
+              </span>
+            </div>
           </div>
           <div id="job-chat-anchor"></div>
         </div>
         <!-- Input -->
-        <div class="px-4 py-2 border-t border-slate-800 flex-shrink-0">
+        <div class="flex-shrink-0 px-4 py-3 border-t border-slate-700 bg-slate-900/80">
+          <div class="flex items-center justify-end mb-1.5">
+            <button @click="clearChat()" class="text-xs text-slate-600 hover:text-slate-400 transition-colors">Clear chat</button>
+          </div>
           <form @submit.prevent="sendJobChat()" class="flex gap-2">
             <input
               x-model="chatInput"
               :disabled="chatStreaming || !selected"
               @keydown.enter.prevent="sendJobChat()"
               placeholder="Ask about this role…"
-              class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+              class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
             >
             <button type="submit"
                     :disabled="chatStreaming || !chatInput.trim() || !selected"
-                    class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-lg text-xs transition-colors flex-shrink-0">
-              Send
+                    class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-xl text-sm transition-colors flex-shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+              </svg>
             </button>
           </form>
         </div>
@@ -252,6 +290,22 @@
 <script>
 const ROOT_PATH = "{{ root_path }}";
 
+function extractSalaryHint(desc) {
+  if (!desc) return null;
+  // Match patterns like $120,000 - $160,000, $120k-$160k, MXN $80,000, etc.
+  const patterns = [
+    /\$[\d,]+(?:k)?\s*[-–to]+\s*\$[\d,]+(?:k)?(?:\s*(?:USD|MXN|CAD|annually|\/yr|\/year|per year))?/i,
+    /(?:USD|MXN|CAD)\s*\$?[\d,]+(?:k)?\s*[-–]\s*\$?[\d,]+(?:k)?/i,
+    /[\d,]+(?:k)?\s*[-–]\s*[\d,]+(?:k)?\s*(?:USD|MXN|CAD)/i,
+    /salario[:\s]+\$?[\d,]+(?:\s*[-–]\s*\$?[\d,]+)?(?:\s*(?:MXN|USD))?/i,
+  ];
+  for (const re of patterns) {
+    const m = desc.match(re);
+    if (m) return m[0].trim().slice(0, 60);
+  }
+  return null;
+}
+
 function jobsApp() {
   return {
     jobs: [],
@@ -264,7 +318,11 @@ function jobsApp() {
     search: '',
     filters: { market: '', min_score: 0, remote_only: false, unscored: false },
 
-    // Mini-chat state
+    activeTab: 'details',
+    rescanning: false,
+    rescanMsg: '',
+
+    // Chat state
     chatMessages: [],
     chatInput: '',
     chatStreaming: false,
@@ -369,6 +427,7 @@ function jobsApp() {
       if (this.selected && this.selected.id !== job.id) {
         this.clearChat();
       }
+      this.activeTab = 'details';
       this.selected = job;
       this.detail = null;
       this.actionMessage = '';
@@ -376,6 +435,9 @@ function jobsApp() {
       try {
         const r = await fetch(`${ROOT_PATH}/api/jobs/${job.id}`);
         this.detail = await r.json();
+        if (!job.salary && this.detail && this.detail.description) {
+          this.selected = { ...job, _salary_hint: extractSalaryHint(this.detail.description) };
+        }
       } catch (_) {}
     },
 
@@ -455,6 +517,26 @@ function jobsApp() {
       } finally {
         this.actionLoading = false;
       }
+    },
+
+    async rescanVisa() {
+      this.rescanning = true;
+      this.rescanMsg = '';
+      try {
+        const r = await fetch(`${ROOT_PATH}/api/jobs/rescan-visa`, { method: 'POST' });
+        const data = await r.json();
+        this.rescanMsg = `Updated ${data.updated} of ${data.scanned} jobs`;
+        await this.loadJobs();
+      } catch (_) {
+        this.rescanMsg = 'Error';
+      } finally {
+        this.rescanning = false;
+      }
+    },
+
+    renderMarkdown(text) {
+      if (!text) return '';
+      try { return marked.parse(text); } catch { return text; }
     },
 
     scoreClass(score) {

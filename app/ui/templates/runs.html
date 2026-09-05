@@ -6,7 +6,7 @@
 <div class="flex-1 overflow-y-auto p-6">
   <div class="flex items-center justify-between mb-6">
     <h1 class="text-xl font-semibold">Scrape Runs</h1>
-    <button onclick="triggerRun()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm transition-colors">
+    <button onclick="triggerRun(this)" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm transition-colors">
       Run Now
     </button>
   </div>
@@ -21,12 +21,13 @@
           <th class="pb-3 pr-6">Status</th>
           <th class="pb-3 pr-6">Found</th>
           <th class="pb-3 pr-6">New</th>
-          <th class="pb-3">Matched (≥70)</th>
+          <th class="pb-3 pr-6">Matched (≥70)</th>
+          <th class="pb-3"></th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-800">
         {% for run in runs %}
-        <tr class="hover:bg-slate-800/50">
+        <tr class="hover:bg-slate-800/50 cursor-pointer" onclick="toggleDetail({{ run.id }}, this)">
           <td class="py-3 pr-6 text-slate-500">#{{ run.id }}</td>
           <td class="py-3 pr-6 text-slate-300">{{ run.started_at[:16] }}</td>
           <td class="py-3 pr-6">
@@ -39,13 +40,20 @@
           </td>
           <td class="py-3 pr-6 text-slate-300">{{ run.jobs_found }}</td>
           <td class="py-3 pr-6 text-emerald-400">+{{ run.new_jobs }}</td>
-          <td class="py-3 text-indigo-400">{{ run.jobs_matched }}</td>
+          <td class="py-3 pr-6 text-indigo-400">{{ run.jobs_matched }}</td>
+          <td class="py-3 text-slate-500 text-xs">▼</td>
         </tr>
-        {% if run.error %}
-        <tr>
-          <td colspan="6" class="pb-2 text-xs text-red-400 px-1">{{ run.error }}</td>
+        <tr id="detail-{{ run.id }}" class="hidden">
+          <td colspan="7" class="pb-4 px-2">
+            <div class="bg-slate-800 rounded-lg p-4 font-mono text-xs text-slate-300 whitespace-pre-wrap max-h-72 overflow-y-auto" id="log-{{ run.id }}">
+              {% if run.error %}
+              <span class="text-red-400">ERROR: {{ run.error }}</span>
+              {% else %}
+              Loading...
+              {% endif %}
+            </div>
+          </td>
         </tr>
-        {% endif %}
         {% endfor %}
       </tbody>
     </table>
@@ -58,13 +66,61 @@
 </div>
 
 <script>
-async function triggerRun() {
-  const btn = event.target;
+const ROOT_PATH = "{{ root_path }}";
+const pollers = {};
+
+async function triggerRun(btn) {
   btn.disabled = true;
   btn.textContent = 'Starting...';
-  const r = await fetch('/api/runs/trigger', {method: 'POST'});
+  const r = await fetch(`${ROOT_PATH}/api/runs/trigger`, {method: 'POST'});
   if (r.ok) {
     setTimeout(() => location.reload(), 2000);
+  }
+}
+
+async function toggleDetail(runId, row) {
+  const detail = document.getElementById(`detail-${runId}`);
+  const isHidden = detail.classList.contains('hidden');
+  detail.classList.toggle('hidden');
+
+  if (isHidden) {
+    await refreshLog(runId);
+  } else {
+    clearInterval(pollers[runId]);
+    delete pollers[runId];
+  }
+}
+
+async function refreshLog(runId) {
+  const logEl = document.getElementById(`log-${runId}`);
+  try {
+    const r = await fetch(`${ROOT_PATH}/api/runs/${runId}`);
+    const data = await r.json();
+
+    let content = '';
+    if (data.progress_log) {
+      content = data.progress_log;
+    } else if (data.error) {
+      content = `ERROR: ${data.error}`;
+    } else if (data.status === 'running') {
+      content = 'Starting scrape...';
+    } else if (data.status === 'completed') {
+      content = `Completed.\nFound: ${data.jobs_found} | New: ${data.new_jobs} | Matched: ${data.jobs_matched}`;
+    }
+
+    logEl.textContent = content;
+    logEl.scrollTop = logEl.scrollHeight;
+
+    if (data.status === 'running') {
+      if (!pollers[runId]) {
+        pollers[runId] = setInterval(() => refreshLog(runId), 4000);
+      }
+    } else {
+      clearInterval(pollers[runId]);
+      delete pollers[runId];
+    }
+  } catch(e) {
+    logEl.textContent = 'Error loading log.';
   }
 }
 </script>

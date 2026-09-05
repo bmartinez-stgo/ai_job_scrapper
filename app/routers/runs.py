@@ -179,6 +179,43 @@ async def blacklist_job_company(job_id: int, db: Session = Depends(get_db)):
     return {"ok": True, "message": f"{job.company} added to blacklist"}
 
 
+@router.post("/api/jobs/fix-markets")
+async def fix_job_markets(db: Session = Depends(get_db)):
+    import unicodedata
+    from app.models import JobPosting
+    from app.services.scraper import _visa_status
+
+    def _ascii_lower(s):
+        return unicodedata.normalize('NFD', s).encode('ascii', 'ignore').decode().lower()
+
+    jobs = db.query(JobPosting).filter(JobPosting.market == "us_ca").all()
+    fixed = 0
+    for job in jobs:
+        loc = _ascii_lower(job.location or "")
+        is_mx = "mexico" in loc or loc.endswith(", mx") or ", mx," in loc
+        if is_mx:
+            job.market = "mx"
+            job.visa_status = "ok"
+            fixed += 1
+    db.commit()
+    return {"ok": True, "fixed": fixed}
+
+
+@router.post("/api/jobs/rescan-visa")
+async def rescan_visa_status(db: Session = Depends(get_db)):
+    from app.models import JobPosting
+    from app.services.scraper import _visa_status
+    jobs = db.query(JobPosting).filter(JobPosting.visa_status == "unknown").all()
+    updated = 0
+    for job in jobs:
+        new_status = _visa_status(job.description or "", job.market or "us_ca")
+        if new_status != "unknown":
+            job.visa_status = new_status
+            updated += 1
+    db.commit()
+    return {"ok": True, "updated": updated, "scanned": len(jobs)}
+
+
 @router.post("/api/runs/trigger")
 async def trigger_run(db: Session = Depends(get_db)):
     from app.scheduler import trigger_scrape_now

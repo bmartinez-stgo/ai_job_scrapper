@@ -64,14 +64,8 @@ def trigger_scrape_now():
 
 
 def _scrape_job():
-    asyncio.run(_scrape_async())
-
-
-async def _scrape_async():
     from app.models import ScrapeRun
     from app.services.scraper import run_scrape
-    from app.services.matcher import match_new_jobs
-    from app.services.email_notify import notify_new_matches
 
     db: Session = SessionLocal()
     run = None
@@ -82,10 +76,30 @@ async def _scrape_async():
         db.refresh(run)
 
         result = run_scrape(db, run.id)
-        matched = await match_new_jobs(db, run.id)
 
         run.status = "completed"
         run.completed_at = datetime.utcnow()
+        db.commit()
+
+        # async post-processing in a new event loop
+        asyncio.run(_post_scrape(db, run, result))
+    except Exception as e:
+        logger.error("Scrape job failed: %s", e, exc_info=True)
+        if run:
+            run.status = "failed"
+            run.error_message = str(e)
+            run.completed_at = datetime.utcnow()
+            db.commit()
+    finally:
+        db.close()
+
+
+async def _post_scrape(db: Session, run, result: dict):
+    from app.services.matcher import match_new_jobs
+    from app.services.email_notify import notify_new_matches
+
+    try:
+        matched = await match_new_jobs(db, run.id)
         run.jobs_matched = matched
         db.commit()
 
@@ -103,14 +117,7 @@ async def _scrape_async():
                 for m, j in new_matches
             ])
     except Exception as e:
-        logger.error("Scrape job failed: %s", e)
-        if run:
-            run.status = "failed"
-            run.error_message = str(e)
-            run.completed_at = datetime.utcnow()
-            db.commit()
-    finally:
-        db.close()
+        logger.error("Post-scrape failed: %s", e)
 
 
 def _ghosted_check():
